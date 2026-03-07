@@ -329,18 +329,14 @@ export class ChainClient {
   }
 
   async getBeastOwner(tokenId: number): Promise<string | null> {
-    try {
-      const result = (await this.provider.callContract({
-        contractAddress: this.config.chain.beastContract,
-        entrypoint: "owner_of",
-        calldata: [String(tokenId), "0"],
-      })) as string[];
-      if (!result?.[0]) return null;
-      const hex = result[0].replace(/^0x/i, "").toLowerCase().replace(/^0+/, "");
-      return `0x${hex.length > 0 ? hex : "0"}`;
-    } catch {
-      return null;
-    }
+    const result = (await this.provider.callContract({
+      contractAddress: this.config.chain.beastContract,
+      entrypoint: "owner_of",
+      calldata: [String(tokenId), "0"],
+    })) as string[];
+    if (!result?.[0]) return null;
+    const hex = result[0].replace(/^0x/i, "").toLowerCase().replace(/^0+/, "");
+    return `0x${hex.length > 0 ? hex : "0"}`;
   }
 
   private extractPoisonCount(rawHolder: unknown): number {

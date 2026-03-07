@@ -202,16 +202,16 @@ NODE_OPTIONS='--experimental-wasm-modules' npx tsx src/bootstrap/login.ts config
 | Option | Default | Description |
 |--------|---------|-------------|
 | `sendAllBeasts` | `true` | Send multiple beasts per attack |
-| `maxBeastsPerAttack` | `30` | Cap on beasts per transaction |
-| `avoidTypeDisadvantage` | `true` | Skip attacks where beast has type disadvantage |
+| `maxBeastsPerAttack` | `1` | Cap on beasts per transaction |
+| `avoidTypeDisadvantage` | `false` | Skip attacks where beast has type disadvantage |
 | `requireTypeAdvantage` | `false` | Only attack with type-advantaged beasts |
-| `attackCooldownMs` | `5000` | Minimum time between attacks |
+| `attackCooldownMs` | `30000` | Minimum time between attacks |
 | `useAttackPotions` | `true` | Use attack potions per beast |
 | `attackPotionsPerBeast` | `5` | Number of potions per beast |
 | `pauseOnAttackPotionDepleted` | `true` | Pause the runner when attack potion spend fails due to allowance/balance shortage |
 | `useRevivalPotions` | `true` | Use revival potions per beast |
 | `maxRevivalPotionsPerBeast` | `10` | Skip beasts needing more revives than this in one attack |
-| `burstEnabled` | `true` | Enable high-extra-life burst combo mode |
+| `burstEnabled` | `false` | Enable high-extra-life burst combo mode |
 | `burstExtraLivesThreshold` | `10` | Trigger burst mode when holder has at least this many extra lives |
 | `burstAttackCountPerBeast` | `5` | Target attack count for burst combo (clamped by revival budget) |
 | `burstAttackPotionsPerBeast` | `3` | Attack potions used on burst primary attacker |

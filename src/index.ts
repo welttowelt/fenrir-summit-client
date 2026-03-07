@@ -869,8 +869,13 @@ async function main() {
             consecutiveErrors = 0;
             continue;
           }
-        } catch {
-          // Best effort — proceed with attack if owner check fails.
+        } catch (ownerErr) {
+          logger.warn(
+            `[PROTECT] Owner fallback lookup failed for token=${holderRaw.token_id}; skipping attack cycle to avoid friendly fire: ${serializeError(ownerErr).substring(0, 220)}`
+          );
+          await sleep(config.api.pollIntervalMs);
+          consecutiveErrors = 0;
+          continue;
         }
       }
 
