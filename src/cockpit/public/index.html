@@ -82,64 +82,6 @@
         <button id="refreshStatusBtn" class="sr-only" aria-hidden="true" tabindex="-1">Refresh Status</button>
       </section>
 
-      <section class="panel">
-        <details>
-          <summary>Advanced Settings (Account + Network)</summary>
-          <div class="form-grid form-grid-2">
-            <label>
-              Cartridge Username
-              <input type="text" data-path="account.username" />
-            </label>
-            <label>
-              Controller Address
-              <input type="text" data-path="account.controllerAddress" />
-            </label>
-          </div>
-
-          <details>
-            <summary>Network + API</summary>
-            <div class="form-grid form-grid-2">
-              <label>
-                RPC URL
-                <input type="text" data-path="chain.rpcUrl" />
-              </label>
-              <label>
-                Summit Contract
-                <input type="text" data-path="chain.summitContract" />
-              </label>
-              <label>
-                Beast Contract
-                <input type="text" data-path="chain.beastContract" />
-              </label>
-              <label>
-                Account Class Hash
-                <input type="text" data-path="chain.accountClassHash" />
-              </label>
-              <label>
-                Tx Wait Retries
-                <input type="number" data-kind="number" data-path="chain.txWaitRetries" />
-              </label>
-              <label>
-                Tx Wait Interval (ms)
-                <input type="number" data-kind="number" data-path="chain.txWaitIntervalMs" />
-              </label>
-              <label>
-                API Base URL
-                <input type="text" data-path="api.baseUrl" />
-              </label>
-              <label>
-                API WS URL
-                <input type="text" data-path="api.wsUrl" />
-              </label>
-              <label>
-                API Poll Interval (ms)
-                <input type="number" data-kind="number" data-path="api.pollIntervalMs" />
-              </label>
-            </div>
-          </details>
-        </details>
-      </section>
-
       <section class="panel strategy-panel">
         <div class="panel-title-row">
           <h2>Strategy Cockpit</h2>
@@ -248,6 +190,64 @@
           <button id="saveRawBtn" class="btn btn-primary">Save Raw JSON</button>
         </div>
         <textarea id="rawConfigEditor" class="raw-editor" spellcheck="false"></textarea>
+      </section>
+
+      <section class="panel">
+        <details>
+          <summary>Advanced Settings (Account + Network)</summary>
+          <div class="form-grid form-grid-2">
+            <label>
+              Cartridge Username
+              <input type="text" data-path="account.username" />
+            </label>
+            <label>
+              Controller Address
+              <input type="text" data-path="account.controllerAddress" />
+            </label>
+          </div>
+
+          <details>
+            <summary>Network + API</summary>
+            <div class="form-grid form-grid-2">
+              <label>
+                RPC URL
+                <input type="text" data-path="chain.rpcUrl" />
+              </label>
+              <label>
+                Summit Contract
+                <input type="text" data-path="chain.summitContract" />
+              </label>
+              <label>
+                Beast Contract
+                <input type="text" data-path="chain.beastContract" />
+              </label>
+              <label>
+                Account Class Hash
+                <input type="text" data-path="chain.accountClassHash" />
+              </label>
+              <label>
+                Tx Wait Retries
+                <input type="number" data-kind="number" data-path="chain.txWaitRetries" />
+              </label>
+              <label>
+                Tx Wait Interval (ms)
+                <input type="number" data-kind="number" data-path="chain.txWaitIntervalMs" />
+              </label>
+              <label>
+                API Base URL
+                <input type="text" data-path="api.baseUrl" />
+              </label>
+              <label>
+                API WS URL
+                <input type="text" data-path="api.wsUrl" />
+              </label>
+              <label>
+                API Poll Interval (ms)
+                <input type="number" data-kind="number" data-path="api.pollIntervalMs" />
+              </label>
+            </div>
+          </details>
+        </details>
       </section>
     </main>
 
