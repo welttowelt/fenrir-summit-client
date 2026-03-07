@@ -80,8 +80,8 @@ const DEFAULT_RPC_URL = "https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_9";
 const DEFAULT_SUMMIT_CONTRACT = "0x01aa95ea66e7e01acf7dc3fda8be0d8661230c4c36b0169e2bab8ab4d6700dfc";
 const STARKNET_MAINNET_CHAIN_ID_HEX = "0x534e5f4d41494e";
 const DEFAULT_PROFILE_ID = "runner";
-const ALLIANCE_NAME = "KrüP1k4C0fCh4rH4n0d1 Alliance";
-const ALLIANCE_ATTACK_GOAL = 50;
+const ALLIANCE_NAME = "Group Alliance";
+const ALLIANCE_ATTACK_GOAL = 50000;
 const API_BASE_STORAGE_KEY = "fenrir.cockpitApiBaseUrl";
 const AUTO_API_BASE_CANDIDATES = ["", "http://127.0.0.1:8788", "http://localhost:8788"];
 const CONTROLLER_METHODS = [
@@ -110,6 +110,10 @@ function setText(el, value) {
   if (el instanceof HTMLElement) {
     el.textContent = String(value);
   }
+}
+
+function formatInt(value) {
+  return new Intl.NumberFormat("en-US").format(Math.max(0, Math.floor(Number(value) || 0)));
 }
 
 function summarizeBattleStats(logTail, running) {
@@ -156,7 +160,7 @@ function renderBattleStats() {
   const attacks = Math.max(0, Number(stats.actions || 0));
   const percent = Math.min(100, Math.round((attacks / ALLIANCE_ATTACK_GOAL) * 100));
   const remaining = Math.max(0, ALLIANCE_ATTACK_GOAL - attacks);
-  setText(els.contributionValue, `${attacks} / ${ALLIANCE_ATTACK_GOAL} attacks`);
+  setText(els.contributionValue, `${formatInt(attacks)} / ${formatInt(ALLIANCE_ATTACK_GOAL)} attacks`);
   setText(els.contributionPercent, `${percent}% of alliance goal`);
   if (els.contributionProgress instanceof HTMLElement) {
     els.contributionProgress.style.width = `${percent}%`;
@@ -166,21 +170,19 @@ function renderBattleStats() {
     setText(els.contributionMessage, "Goal complete. I am doing my part for the alliance.");
     setText(els.contributionBadge, "Goal Reached");
   } else {
-    setText(els.contributionMessage, `${remaining} attacks to goal. I am doing my part.`);
+    setText(els.contributionMessage, `${formatInt(remaining)} attacks to goal. I am doing my part.`);
     setText(els.contributionBadge, "Energy Flash");
   }
 
   const profile = state.profileId || "runner";
   const shareText = [
-    `${ALLIANCE_NAME} | Battle Snapshot`,
-    "Fenrir Summit Client",
-    `Profile: ${profile}`,
-    `Mode: ${stats.runnerMode}`,
-    `Contribution: ${attacks}/${ALLIANCE_ATTACK_GOAL} attacks`,
-    `Actions: ${stats.actions} | Poison: ${stats.poison} | Rewards: ${stats.rewards}`,
-    `Signals: ${stats.signals} | Errors: ${stats.errors}`,
-    `Last signal: ${stats.lastSignal}`,
-    "#FenrirSummit #Starknet",
+    `${ALLIANCE_NAME} | Alliance Contribution`,
+    `Contribution: ${formatInt(attacks)} / ${formatInt(ALLIANCE_ATTACK_GOAL)} attacks`,
+    `${percent}% complete`,
+    attacks >= ALLIANCE_ATTACK_GOAL
+      ? "Target reached. I am doing my part."
+      : `${formatInt(remaining)} attacks to target. I am doing my part.`,
+    "#FenrirSummit #Alliance",
   ].join("\n");
   setText(els.shareCardText, shareText);
 }
