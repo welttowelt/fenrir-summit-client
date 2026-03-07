@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fenrir Summit</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="aura"></div>
+    <div class="grid-overlay"></div>
+    <main class="shell">
+      <header class="hero panel">
+        <p class="eyebrow">Fenrir Operations</p>
+        <h1>Fenrir Summit</h1>
+        <p>
+          Multi-user command surface for Cartridge profiles. Register sessions, tune potion policy,
+          adjust strategy weights, and control runner lifecycle.
+        </p>
+        <div id="messageBar" class="message">Ready.</div>
+      </header>
+
+      <section class="panel command-panel">
+        <div class="panel-title-row">
+          <h2>Command Deck</h2>
+          <span id="profileBadge" class="badge">No profile</span>
+        </div>
+
+        <div class="profile-row">
+          <label for="profileSelect">Profile</label>
+          <select id="profileSelect"></select>
+          <button id="createProfileBtn" class="btn btn-soft">New Profile</button>
+          <button id="reloadProfilesBtn" class="btn btn-soft">Reload</button>
+        </div>
+
+        <div class="actions">
+          <button id="saveConfigBtn" class="btn btn-primary">Save Config</button>
+          <button id="startRunnerBtn" class="btn btn-success">Start Runner</button>
+          <button id="stopRunnerBtn" class="btn btn-danger">Stop Runner</button>
+          <button id="connectWalletBtn" class="btn btn-amber">Connect Cartridge</button>
+          <button id="disconnectWalletBtn" class="btn btn-soft">Disconnect Wallet</button>
+          <button id="registerSessionBtn" class="btn btn-amber">Register Session</button>
+          <button id="checkSessionBtn" class="btn btn-soft">Check Session</button>
+          <button id="refreshStatusBtn" class="btn btn-soft">Refresh Status</button>
+        </div>
+
+        <div class="status-grid">
+          <article class="status-card">
+            <h3>Runner</h3>
+            <p id="runnerState" class="status-chip status-off">Unknown</p>
+            <p id="runnerMeta" class="muted">No data yet</p>
+          </article>
+          <article class="status-card">
+            <h3>Session</h3>
+            <p id="sessionState" class="status-chip status-off">Unknown</p>
+            <p id="sessionMeta" class="muted">No data yet</p>
+          </article>
+          <article class="status-card">
+            <h3>Wallet</h3>
+            <p id="walletState" class="status-chip status-off">Disconnected</p>
+            <p id="walletMeta" class="muted">Connect Cartridge to bind a user wallet.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title-row">
+          <h2>Account + Network</h2>
+        </div>
+
+        <div class="form-grid form-grid-2">
+          <label>
+            Cartridge Username
+            <input type="text" data-path="account.username" />
+          </label>
+          <label>
+            Controller Address
+            <input type="text" data-path="account.controllerAddress" />
+          </label>
+        </div>
+
+        <details open>
+          <summary>Network + API</summary>
+          <div class="form-grid form-grid-2">
+            <label>
+              RPC URL
+              <input type="text" data-path="chain.rpcUrl" />
+            </label>
+            <label>
+              Summit Contract
+              <input type="text" data-path="chain.summitContract" />
+            </label>
+            <label>
+              Beast Contract
+              <input type="text" data-path="chain.beastContract" />
+            </label>
+            <label>
+              Account Class Hash
+              <input type="text" data-path="chain.accountClassHash" />
+            </label>
+            <label>
+              Tx Wait Retries
+              <input type="number" data-kind="number" data-path="chain.txWaitRetries" />
+            </label>
+            <label>
+              Tx Wait Interval (ms)
+              <input type="number" data-kind="number" data-path="chain.txWaitIntervalMs" />
+            </label>
+            <label>
+              API Base URL
+              <input type="text" data-path="api.baseUrl" />
+            </label>
+            <label>
+              API WS URL
+              <input type="text" data-path="api.wsUrl" />
+            </label>
+            <label>
+              API Poll Interval (ms)
+              <input type="number" data-kind="number" data-path="api.pollIntervalMs" />
+            </label>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel strategy-panel">
+        <div class="panel-title-row">
+          <h2>Strategy Cockpit</h2>
+        </div>
+
+        <div class="strategy-columns">
+          <div>
+            <h3>Core Combat</h3>
+            <div class="form-grid">
+              <label class="toggle"><input type="checkbox" data-path="strategy.sendAllBeasts" />Send All Beasts</label>
+              <label>
+                Max Beasts Per Attack
+                <input type="number" data-kind="number" data-path="strategy.maxBeastsPerAttack" />
+              </label>
+              <label>
+                Attack Count Per Beast
+                <input type="number" data-kind="number" data-path="strategy.attackCountPerBeast" />
+              </label>
+              <label>
+                Attack Cooldown (ms)
+                <input type="number" data-kind="number" data-path="strategy.attackCooldownMs" />
+              </label>
+              <label>
+                Min Score To Attack
+                <input type="number" data-kind="number" data-path="strategy.minScoreToAttack" />
+              </label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.avoidTypeDisadvantage" />Avoid Type Disadvantage</label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.requireTypeAdvantage" />Require Type Advantage</label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.conservativeMode" />Conservative Mode</label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.experimentMode" />Experiment Mode</label>
+              <label>
+                Experiment Explore Per Profile
+                <input type="number" data-kind="number" data-path="strategy.experimentExplorePerProfile" />
+              </label>
+            </div>
+
+            <h3>Attack Potions</h3>
+            <div class="form-grid">
+              <label class="toggle"><input type="checkbox" data-path="strategy.useAttackPotions" />Use Attack Potions</label>
+              <label>
+                Attack Potions Per Beast
+                <input type="number" data-kind="number" data-path="strategy.attackPotionsPerBeast" />
+              </label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.requireAttackPotionsForAllAttacks" />Require Potions For All Attacks</label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.pauseOnAttackPotionDepleted" />Pause When Potions Depleted</label>
+            </div>
+
+            <h3>Revive + Burst</h3>
+            <div class="form-grid">
+              <label class="toggle"><input type="checkbox" data-path="strategy.useRevivalPotions" />Use Revival Potions</label>
+              <label>
+                Max Revival Potions Per Beast
+                <input type="number" data-kind="number" data-path="strategy.maxRevivalPotionsPerBeast" />
+              </label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.burstEnabled" />Burst Enabled</label>
+              <label>
+                Burst Extra Lives Threshold
+                <input type="number" data-kind="number" data-path="strategy.burstExtraLivesThreshold" />
+              </label>
+              <label>
+                Burst Attack Count
+                <input type="number" data-kind="number" data-path="strategy.burstAttackCountPerBeast" />
+              </label>
+              <label>
+                Burst Attack Potions
+                <input type="number" data-kind="number" data-path="strategy.burstAttackPotionsPerBeast" />
+              </label>
+              <label>
+                Burst Min Type Advantage
+                <input type="number" step="0.1" data-kind="number" data-path="strategy.burstMinTypeAdvantage" />
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <h3>Defense + Poison</h3>
+            <div class="form-grid">
+              <label class="toggle"><input type="checkbox" data-path="strategy.useExtraLifePotions" />Use Extra Life Potions</label>
+              <label>
+                Extra Life Per Attack
+                <input type="number" data-kind="number" data-path="strategy.extraLifePotionsPerAttack" />
+              </label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.extraLifeOnlyForHoldQuest" />Only Apply Extra Life While Holding</label>
+              <label>
+                Extra Life Min Score
+                <input type="number" data-kind="number" data-path="strategy.extraLifeMinScore" />
+              </label>
+              <label>
+                Extra Life Min Type Advantage
+                <input type="number" step="0.1" data-kind="number" data-path="strategy.extraLifeMinTypeAdvantage" />
+              </label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.usePoisonOnHighExtraLives" />Use Poison On High Extra Lives</label>
+              <label>
+                Poison Holder Extra Lives Threshold
+                <input type="number" data-kind="number" data-path="strategy.poisonHolderExtraLivesThreshold" />
+              </label>
+              <label>
+                Poison Count Per Cast
+                <input type="number" data-kind="number" data-path="strategy.poisonCountPerCast" />
+              </label>
+              <label>
+                Poison Extra Lives Multiplier
+                <input type="number" data-kind="number" data-path="strategy.poisonExtraLivesMultiplier" />
+              </label>
+              <label>
+                Poison Cooldown (ms)
+                <input type="number" data-kind="number" data-path="strategy.poisonCooldownMs" />
+              </label>
+            </div>
+
+            <h3>Quest + Rotation</h3>
+            <div class="form-grid">
+              <label>
+                Attack Streak Target
+                <input type="number" data-kind="number" data-path="strategy.attackStreakTarget" />
+              </label>
+              <label>
+                Growing Stronger Target Levels
+                <input type="number" data-kind="number" data-path="strategy.growingStrongerTargetLevels" />
+              </label>
+              <label class="toggle"><input type="checkbox" data-path="strategy.rotateWhileHoldingForQuests" />Rotate While Holding</label>
+              <label>
+                Rotate Hold Seconds
+                <input type="number" data-kind="number" data-path="strategy.rotateHoldSeconds" />
+              </label>
+              <label>
+                Owner Beasts Refresh (ms)
+                <input type="number" data-kind="number" data-path="strategy.ownerBeastsRefreshMs" />
+              </label>
+              <label>
+                Protected Owners Refresh (ms)
+                <input type="number" data-kind="number" data-path="strategy.protectedOwnersRefreshMs" />
+              </label>
+              <label>
+                Claim Reward Threshold
+                <input type="number" step="0.0001" data-kind="number" data-path="strategy.claimRewardThreshold" />
+              </label>
+              <label>
+                Max Gas Cost STRK
+                <input type="number" step="0.001" data-kind="number" data-path="strategy.maxGasCostStrk" />
+              </label>
+            </div>
+
+            <h3>Profile Mix</h3>
+            <div class="form-grid form-grid-3">
+              <label>
+                Focused
+                <input type="number" data-kind="number" data-path="strategy.maxBeastsProfiles.focused" />
+              </label>
+              <label>
+                Balanced
+                <input type="number" data-kind="number" data-path="strategy.maxBeastsProfiles.balanced" />
+              </label>
+              <label>
+                Swarm
+                <input type="number" data-kind="number" data-path="strategy.maxBeastsProfiles.swarm" />
+              </label>
+            </div>
+
+            <h3>Non-Aggression Pact</h3>
+            <p class="muted">
+              Add friendly players here. Their addresses are auto-synced into protected owners so
+              the runner never attacks them.
+            </p>
+            <div class="friendly-toolbar">
+              <button id="addFriendlyBtn" type="button" class="btn btn-soft">Add Friendly Player</button>
+            </div>
+            <div id="friendlyPlayersList" class="friendly-list"></div>
+            <template id="friendlyPlayerTemplate">
+              <div class="friendly-row">
+                <input type="text" data-friendly="name" placeholder="Player name (optional)" />
+                <input type="text" data-friendly="address" placeholder="Controller address 0x..." />
+                <button type="button" class="btn btn-soft friendly-remove">Remove</button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title-row">
+          <h2>Live Runner Log</h2>
+          <span id="logPath" class="muted">No log path</span>
+        </div>
+        <pre id="logOutput" class="log-output">No logs loaded.</pre>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title-row">
+          <h2>Raw Config JSON</h2>
+          <span class="muted">Full profile config visibility</span>
+        </div>
+        <div class="raw-actions">
+          <button id="refreshRawBtn" class="btn btn-soft">Refresh Raw From Form</button>
+          <button id="applyRawBtn" class="btn btn-soft">Apply Raw To Form</button>
+          <button id="saveRawBtn" class="btn btn-primary">Save Raw JSON</button>
+        </div>
+        <textarea id="rawConfigEditor" class="raw-editor" spellcheck="false"></textarea>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

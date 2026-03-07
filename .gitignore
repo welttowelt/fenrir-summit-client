@@ -1,0 +1,28 @@
+node_modules/
+dist/
+*.log
+.env
+
+# Session secrets — NEVER commit
+data/*/cartridge-session/
+data/*/cartridge-session*/
+data/*/session.json
+data/*/events.jsonl
+data/summit_abi.json
+public-data/*/cartridge-session/
+public-data/*/cartridge-session*/
+public-data/*/session.json
+public-data/*/events.jsonl
+public-data/cockpit.log
+
+# Config with secrets
+config/*.json
+!config/example.json
+public-config/*.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Generated cockpit bundles
+src/cockpit/public/vendor/cartridge-controller.bundle.js

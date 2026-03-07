@@ -1,0 +1,64 @@
+{
+  "account": {
+    "username": "YourCartridgeUsername",
+    "controllerAddress": "0xYOUR_CONTROLLER_ADDRESS"
+  },
+  "chain": {
+    "rpcUrl": "https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_9",
+    "summitContract": "0x01aa95ea66e7e01acf7dc3fda8be0d8661230c4c36b0169e2bab8ab4d6700dfc",
+    "beastContract": "0x046da8955829adf2bda310099a0063451923f02e648cf25a1203aac6335cf0e4",
+    "accountClassHash": "0x743c83c41ce99ad470aa308823f417b2141e02e04571f5c0004e743556e7faf",
+    "txWaitRetries": 80,
+    "txWaitIntervalMs": 1500
+  },
+  "api": {
+    "baseUrl": "https://summit-production-69ed.up.railway.app",
+    "wsUrl": "wss://summit-production-69ed.up.railway.app/ws",
+    "pollIntervalMs": 5000
+  },
+  "strategy": {
+    "conservativeMode": false,
+    "avoidTypeDisadvantage": true,
+    "requireTypeAdvantage": false,
+    "minScoreToAttack": 10,
+    "claimRewardThreshold": 0.001,
+    "maxGasCostStrk": 0.1,
+    "attackCooldownMs": 5000,
+    "useAttackPotions": true,
+    "attackPotionsPerBeast": 5,
+    "pauseOnAttackPotionDepleted": true,
+    "useExtraLifePotions": false,
+    "extraLifePotionsPerAttack": 1,
+    "extraLifeOnlyForHoldQuest": true,
+    "extraLifeMinScore": 300,
+    "extraLifeMinTypeAdvantage": 1,
+    "attackCountPerBeast": 1,
+    "useRevivalPotions": true,
+    "maxRevivalPotionsPerBeast": 10,
+    "protectedOwners": [],
+    "friendlyPlayers": [],
+    "protectedOwnersRefreshMs": 300000,
+    "attackStreakTarget": 10,
+    "growingStrongerTargetLevels": 1,
+    "rotateWhileHoldingForQuests": false,
+    "rotateHoldSeconds": 10,
+    "burstEnabled": true,
+    "burstExtraLivesThreshold": 10,
+    "burstAttackCountPerBeast": 5,
+    "burstAttackPotionsPerBeast": 3,
+    "burstMinTypeAdvantage": 1.5,
+    "usePoisonOnHighExtraLives": false,
+    "poisonHolderExtraLivesThreshold": 1,
+    "poisonCountPerCast": 1,
+    "poisonCooldownMs": 20000,
+    "sendAllBeasts": true,
+    "maxBeastsPerAttack": 30
+  },
+  "session": {
+    "file": "./data/yourprofile/session.json",
+    "dirName": "cartridge-session"
+  },
+  "logging": {
+    "eventsFile": "./data/yourprofile/events.jsonl"
+  }
+}
