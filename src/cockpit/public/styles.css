@@ -111,12 +111,6 @@ body {
   font-size: 1rem;
 }
 
-.hero-positioning {
-  margin-top: 8px !important;
-  max-width: 88ch;
-  font-size: 0.9rem;
-}
-
 .message {
   margin-top: 14px;
   padding: 10px 12px;
@@ -142,47 +136,6 @@ body {
   gap: 14px;
 }
 
-.value-panel {
-  display: grid;
-  gap: 12px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(190, 242, 67, 0.1), transparent 40%),
-    linear-gradient(145deg, rgba(8, 39, 29, 0.9) 0%, rgba(10, 37, 27, 0.95) 100%);
-}
-
-.announcement {
-  margin: 0;
-  border-left: 3px solid rgba(217, 255, 95, 0.55);
-  padding-left: 10px;
-  color: #ebffd2;
-  font-weight: 600;
-}
-
-.benefit-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.benefit-card {
-  border: 1px solid rgba(170, 244, 190, 0.2);
-  border-radius: 12px;
-  padding: 11px;
-  background: rgba(7, 29, 21, 0.72);
-}
-
-.benefit-card h3 {
-  margin: 0 0 6px;
-  color: var(--accent-strong);
-  font-size: 0.86rem;
-}
-
-.benefit-card p {
-  margin: 0;
-  color: #c6e9d2;
-  font-size: 0.83rem;
-  line-height: 1.4;
-}
 
 .command-top {
   display: grid;
@@ -613,10 +566,6 @@ summary {
   }
 
   .command-top {
-    grid-template-columns: 1fr;
-  }
-
-  .benefit-grid {
     grid-template-columns: 1fr;
   }
 
