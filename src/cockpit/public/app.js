@@ -48,6 +48,7 @@ const state = {
   ui: {
     sessionValid: false,
     runnerRunning: false,
+    configDirty: false,
   },
 };
 
@@ -79,10 +80,25 @@ function setMessage(text, type = "info") {
   }
 }
 
+function markConfigDirty() {
+  if (!state.profileId) {
+    return;
+  }
+  state.ui.configDirty = true;
+  updateSetupProgress();
+  updateActionAvailability();
+}
+
+function markConfigClean() {
+  state.ui.configDirty = false;
+  updateSetupProgress();
+  updateActionAvailability();
+}
+
 function updateActionAvailability() {
   const hasProfile = Boolean(state.profileId);
   if (els.applyChangesBtn instanceof HTMLButtonElement) {
-    els.applyChangesBtn.disabled = !hasProfile;
+    els.applyChangesBtn.disabled = !hasProfile || !state.ui.configDirty;
   }
   if (els.registerSessionBtn instanceof HTMLButtonElement && !state.sessionRegistering) {
     els.registerSessionBtn.disabled = !hasProfile;
@@ -91,7 +107,8 @@ function updateActionAvailability() {
     els.checkSessionBtn.disabled = !hasProfile;
   }
   if (els.startRunnerBtn instanceof HTMLButtonElement) {
-    els.startRunnerBtn.disabled = !hasProfile || !state.ui.sessionValid || state.ui.runnerRunning;
+    els.startRunnerBtn.disabled =
+      !hasProfile || !state.ui.sessionValid || state.ui.runnerRunning || state.ui.configDirty;
   }
   if (els.stopRunnerBtn instanceof HTMLButtonElement) {
     els.stopRunnerBtn.disabled = !hasProfile || !state.ui.runnerRunning;
@@ -119,22 +136,25 @@ function updateSetupProgress() {
   const profileReady = Boolean(state.profileId);
   const walletReady = Boolean(state.wallet.connected);
   const sessionReady = Boolean(state.ui.sessionValid);
+  const applyReady = profileReady && walletReady && sessionReady && !state.ui.configDirty;
   const runnerReady = Boolean(state.ui.runnerRunning);
 
-  markSetupStep("profile", profileReady ? "done" : "active");
   markSetupStep("wallet", profileReady ? (walletReady ? "done" : "active") : "idle");
   markSetupStep("session", profileReady && walletReady ? (sessionReady ? "done" : "active") : "idle");
-  markSetupStep("runner", profileReady && walletReady && sessionReady ? (runnerReady ? "done" : "active") : "idle");
+  markSetupStep("apply", profileReady && walletReady && sessionReady ? (applyReady ? "done" : "active") : "idle");
+  markSetupStep("runner", applyReady ? (runnerReady ? "done" : "active") : "idle");
 
   if (!(els.nextActionHint instanceof HTMLElement)) {
     return;
   }
   if (!profileReady) {
-    els.nextActionHint.textContent = "Next: select or create a profile.";
+    els.nextActionHint.textContent = "Loading profile...";
   } else if (!walletReady) {
     els.nextActionHint.textContent = "Next: connect Cartridge wallet.";
   } else if (!sessionReady) {
-    els.nextActionHint.textContent = "Next: register session keys and approve in Cartridge.";
+    els.nextActionHint.textContent = "Next: register session and approve in Cartridge.";
+  } else if (state.ui.configDirty) {
+    els.nextActionHint.textContent = "Next: apply changes.";
   } else if (!runnerReady) {
     els.nextActionHint.textContent = "Next: start runner.";
   } else {
@@ -320,6 +340,7 @@ function resetUiForUnavailableApi() {
   }
   state.ui.sessionValid = false;
   state.ui.runnerRunning = false;
+  state.ui.configDirty = false;
   updateSetupProgress();
   updateActionAvailability();
 }
@@ -974,6 +995,7 @@ async function loadProfile(profileId) {
   state.config = data.config;
   els.profileBadge.textContent = profileId;
   populateForm(state.config);
+  markConfigClean();
 
   await Promise.all([refreshRunnerStatus(), refreshSessionStatus()]);
   startPolling();
@@ -1000,6 +1022,7 @@ async function applyConfig(showMessage = true) {
 
   state.config = result.config;
   populateForm(state.config);
+  markConfigClean();
   if (showMessage) {
     setMessage("Changes applied", "success");
   }
@@ -1021,6 +1044,7 @@ async function saveRawConfig() {
 
   state.config = result.config;
   populateForm(state.config);
+  markConfigClean();
   setMessage(`Saved raw JSON for ${state.profileId}`, "success");
   await loadProfiles(state.profileId);
 }
@@ -1127,7 +1151,6 @@ async function startRunner() {
   if (!state.profileId) {
     return;
   }
-  await applyConfig(false);
   await requestJson(`/api/profiles/${encodeURIComponent(state.profileId)}/start`, { method: "POST" });
   setMessage(`Runner started for ${state.profileId}`, "success");
   await refreshRunnerStatus();
@@ -1334,6 +1357,7 @@ function bindUi() {
       const raw = readRawEditorConfig();
       state.config = raw;
       populateForm(raw);
+      markConfigDirty();
       setMessage("Raw JSON applied to form", "success");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : String(err), "error");
@@ -1353,6 +1377,7 @@ function bindUi() {
       return;
     }
     els.friendlyPlayersList.appendChild(createFriendlyRow({ name: "", address: "" }));
+    markConfigDirty();
   });
 
   els.friendlyPlayersList?.addEventListener("click", (event) => {
@@ -1368,6 +1393,7 @@ function bindUi() {
     const row = target.closest(".friendly-row");
     if (row instanceof HTMLElement) {
       row.remove();
+      markConfigDirty();
     }
 
     if (
@@ -1377,6 +1403,14 @@ function bindUi() {
       els.friendlyPlayersList.appendChild(createFriendlyRow({ name: "", address: "" }));
     }
   });
+
+  for (const field of allFields()) {
+    field.addEventListener("input", markConfigDirty);
+    field.addEventListener("change", markConfigDirty);
+  }
+
+  els.friendlyPlayersList?.addEventListener("input", markConfigDirty);
+  els.friendlyPlayersList?.addEventListener("change", markConfigDirty);
 }
 
 async function init() {
