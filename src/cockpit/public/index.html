@@ -21,28 +21,53 @@
       </header>
 
       <section class="panel command-panel">
-        <div class="panel-title-row">
-          <h2>Command Deck</h2>
-          <span id="profileBadge" class="badge">No profile</span>
+        <div class="command-top">
+          <div class="command-main">
+            <div class="panel-title-row">
+              <h2>Command Deck</h2>
+              <span id="profileBadge" class="badge">No profile</span>
+            </div>
+
+            <div class="single-profile">
+              <span>Profile</span>
+              <strong>runner</strong>
+            </div>
+
+            <div class="actions">
+              <button id="applyChangesBtn" class="btn btn-primary">Apply Changes</button>
+              <button id="startRunnerBtn" class="btn btn-success">Start Runner</button>
+              <button id="stopRunnerBtn" class="btn btn-danger">Stop Runner</button>
+            </div>
+
+            <select id="profileSelect" class="sr-only"></select>
+            <button id="createProfileBtn" class="sr-only" aria-hidden="true" tabindex="-1">New Profile</button>
+            <button id="reloadProfilesBtn" class="sr-only" aria-hidden="true" tabindex="-1">Reload</button>
+            <button id="saveConfigBtn" class="sr-only" aria-hidden="true" tabindex="-1">Save Config</button>
+            <button id="refreshStatusBtn" class="sr-only" aria-hidden="true" tabindex="-1">Refresh Status</button>
+          </div>
+
+          <aside class="onboarding-card">
+            <p class="onboarding-kicker">First Step</p>
+            <h3>Connect Cartridge + Set Session Keys</h3>
+            <p class="onboarding-copy">
+              Start here before any runner actions. Connect your Cartridge wallet, then register and verify session keys.
+            </p>
+            <div class="onboarding-actions">
+              <button id="connectWalletBtn" class="btn btn-amber">Connect Cartridge</button>
+              <button id="registerSessionBtn" class="btn btn-amber">Register Session Keys</button>
+              <button id="checkSessionBtn" class="btn btn-soft">Check Session</button>
+              <button id="disconnectWalletBtn" class="btn btn-soft">Disconnect Wallet</button>
+            </div>
+          </aside>
         </div>
 
-        <div class="profile-row">
-          <label for="profileSelect">Profile</label>
-          <select id="profileSelect"></select>
-          <button id="createProfileBtn" class="btn btn-soft">New Profile</button>
-          <button id="reloadProfilesBtn" class="btn btn-soft">Reload</button>
+        <div class="setup-strip" id="setupStrip" aria-label="Setup progress">
+          <span class="setup-step" data-setup-step="profile">1 Profile</span>
+          <span class="setup-step" data-setup-step="wallet">2 Wallet</span>
+          <span class="setup-step" data-setup-step="session">3 Session</span>
+          <span class="setup-step" data-setup-step="runner">4 Runner</span>
         </div>
-
-        <div class="actions">
-          <button id="saveConfigBtn" class="btn btn-primary">Save Config</button>
-          <button id="startRunnerBtn" class="btn btn-success">Start Runner</button>
-          <button id="stopRunnerBtn" class="btn btn-danger">Stop Runner</button>
-          <button id="connectWalletBtn" class="btn btn-amber">Connect Cartridge</button>
-          <button id="disconnectWalletBtn" class="btn btn-soft">Disconnect Wallet</button>
-          <button id="registerSessionBtn" class="btn btn-amber">Register Session</button>
-          <button id="checkSessionBtn" class="btn btn-soft">Check Session</button>
-          <button id="refreshStatusBtn" class="btn btn-soft">Refresh Status</button>
-        </div>
+        <p id="nextActionHint" class="next-action">Next: select or create a profile.</p>
 
         <div class="status-grid">
           <article class="status-card">
@@ -64,61 +89,60 @@
       </section>
 
       <section class="panel">
-        <div class="panel-title-row">
-          <h2>Account + Network</h2>
-        </div>
-
-        <div class="form-grid form-grid-2">
-          <label>
-            Cartridge Username
-            <input type="text" data-path="account.username" />
-          </label>
-          <label>
-            Controller Address
-            <input type="text" data-path="account.controllerAddress" />
-          </label>
-        </div>
-
-        <details open>
-          <summary>Network + API</summary>
+        <details>
+          <summary>Advanced Settings (Account + Network)</summary>
           <div class="form-grid form-grid-2">
             <label>
-              RPC URL
-              <input type="text" data-path="chain.rpcUrl" />
+              Cartridge Username
+              <input type="text" data-path="account.username" />
             </label>
             <label>
-              Summit Contract
-              <input type="text" data-path="chain.summitContract" />
-            </label>
-            <label>
-              Beast Contract
-              <input type="text" data-path="chain.beastContract" />
-            </label>
-            <label>
-              Account Class Hash
-              <input type="text" data-path="chain.accountClassHash" />
-            </label>
-            <label>
-              Tx Wait Retries
-              <input type="number" data-kind="number" data-path="chain.txWaitRetries" />
-            </label>
-            <label>
-              Tx Wait Interval (ms)
-              <input type="number" data-kind="number" data-path="chain.txWaitIntervalMs" />
-            </label>
-            <label>
-              API Base URL
-              <input type="text" data-path="api.baseUrl" />
-            </label>
-            <label>
-              API WS URL
-              <input type="text" data-path="api.wsUrl" />
-            </label>
-            <label>
-              API Poll Interval (ms)
-              <input type="number" data-kind="number" data-path="api.pollIntervalMs" />
+              Controller Address
+              <input type="text" data-path="account.controllerAddress" />
             </label>
           </div>
+
+          <details>
+            <summary>Network + API</summary>
+            <div class="form-grid form-grid-2">
+              <label>
+                RPC URL
+                <input type="text" data-path="chain.rpcUrl" />
+              </label>
+              <label>
+                Summit Contract
+                <input type="text" data-path="chain.summitContract" />
+              </label>
+              <label>
+                Beast Contract
+                <input type="text" data-path="chain.beastContract" />
+              </label>
+              <label>
+                Account Class Hash
+                <input type="text" data-path="chain.accountClassHash" />
+              </label>
+              <label>
+                Tx Wait Retries
+                <input type="number" data-kind="number" data-path="chain.txWaitRetries" />
+              </label>
+              <label>
+                Tx Wait Interval (ms)
+                <input type="number" data-kind="number" data-path="chain.txWaitIntervalMs" />
+              </label>
+              <label>
+                API Base URL
+                <input type="text" data-path="api.baseUrl" />
+              </label>
+              <label>
+                API WS URL
+                <input type="text" data-path="api.wsUrl" />
+              </label>
+              <label>
+                API Poll Interval (ms)
+                <input type="number" data-kind="number" data-path="api.pollIntervalMs" />
+              </label>
+            </div>
+          </details>
         </details>
       </section>
 
@@ -131,31 +155,8 @@
           <div>
             <h3>Core Combat</h3>
             <div class="form-grid">
-              <label class="toggle"><input type="checkbox" data-path="strategy.sendAllBeasts" />Send All Beasts</label>
-              <label>
-                Max Beasts Per Attack
-                <input type="number" data-kind="number" data-path="strategy.maxBeastsPerAttack" />
-              </label>
-              <label>
-                Attack Count Per Beast
-                <input type="number" data-kind="number" data-path="strategy.attackCountPerBeast" />
-              </label>
-              <label>
-                Attack Cooldown (ms)
-                <input type="number" data-kind="number" data-path="strategy.attackCooldownMs" />
-              </label>
-              <label>
-                Min Score To Attack
-                <input type="number" data-kind="number" data-path="strategy.minScoreToAttack" />
-              </label>
               <label class="toggle"><input type="checkbox" data-path="strategy.avoidTypeDisadvantage" />Avoid Type Disadvantage</label>
               <label class="toggle"><input type="checkbox" data-path="strategy.requireTypeAdvantage" />Require Type Advantage</label>
-              <label class="toggle"><input type="checkbox" data-path="strategy.conservativeMode" />Conservative Mode</label>
-              <label class="toggle"><input type="checkbox" data-path="strategy.experimentMode" />Experiment Mode</label>
-              <label>
-                Experiment Explore Per Profile
-                <input type="number" data-kind="number" data-path="strategy.experimentExplorePerProfile" />
-              </label>
             </div>
 
             <h3>Attack Potions</h3>
@@ -169,42 +170,24 @@
               <label class="toggle"><input type="checkbox" data-path="strategy.pauseOnAttackPotionDepleted" />Pause When Potions Depleted</label>
             </div>
 
-            <h3>Revive + Burst</h3>
+            <h3>Revive</h3>
             <div class="form-grid">
               <label class="toggle"><input type="checkbox" data-path="strategy.useRevivalPotions" />Use Revival Potions</label>
               <label>
                 Max Revival Potions Per Beast
                 <input type="number" data-kind="number" data-path="strategy.maxRevivalPotionsPerBeast" />
               </label>
-              <label class="toggle"><input type="checkbox" data-path="strategy.burstEnabled" />Burst Enabled</label>
-              <label>
-                Burst Extra Lives Threshold
-                <input type="number" data-kind="number" data-path="strategy.burstExtraLivesThreshold" />
-              </label>
-              <label>
-                Burst Attack Count
-                <input type="number" data-kind="number" data-path="strategy.burstAttackCountPerBeast" />
-              </label>
-              <label>
-                Burst Attack Potions
-                <input type="number" data-kind="number" data-path="strategy.burstAttackPotionsPerBeast" />
-              </label>
-              <label>
-                Burst Min Type Advantage
-                <input type="number" step="0.1" data-kind="number" data-path="strategy.burstMinTypeAdvantage" />
-              </label>
             </div>
           </div>
 
           <div>
-            <h3>Defense + Poison</h3>
+            <h3>Defense</h3>
             <div class="form-grid">
               <label class="toggle"><input type="checkbox" data-path="strategy.useExtraLifePotions" />Use Extra Life Potions</label>
               <label>
-                Extra Life Per Attack
+                Extra Life For Holding The Summit
                 <input type="number" data-kind="number" data-path="strategy.extraLifePotionsPerAttack" />
               </label>
-              <label class="toggle"><input type="checkbox" data-path="strategy.extraLifeOnlyForHoldQuest" />Only Apply Extra Life While Holding</label>
               <label>
                 Extra Life Min Score
                 <input type="number" data-kind="number" data-path="strategy.extraLifeMinScore" />
@@ -213,6 +196,10 @@
                 Extra Life Min Type Advantage
                 <input type="number" step="0.1" data-kind="number" data-path="strategy.extraLifeMinTypeAdvantage" />
               </label>
+            </div>
+
+            <h3>Poison</h3>
+            <div class="form-grid">
               <label class="toggle"><input type="checkbox" data-path="strategy.usePoisonOnHighExtraLives" />Use Poison On High Extra Lives</label>
               <label>
                 Poison Holder Extra Lives Threshold
@@ -225,59 +212,6 @@
               <label>
                 Poison Extra Lives Multiplier
                 <input type="number" data-kind="number" data-path="strategy.poisonExtraLivesMultiplier" />
-              </label>
-              <label>
-                Poison Cooldown (ms)
-                <input type="number" data-kind="number" data-path="strategy.poisonCooldownMs" />
-              </label>
-            </div>
-
-            <h3>Quest + Rotation</h3>
-            <div class="form-grid">
-              <label>
-                Attack Streak Target
-                <input type="number" data-kind="number" data-path="strategy.attackStreakTarget" />
-              </label>
-              <label>
-                Growing Stronger Target Levels
-                <input type="number" data-kind="number" data-path="strategy.growingStrongerTargetLevels" />
-              </label>
-              <label class="toggle"><input type="checkbox" data-path="strategy.rotateWhileHoldingForQuests" />Rotate While Holding</label>
-              <label>
-                Rotate Hold Seconds
-                <input type="number" data-kind="number" data-path="strategy.rotateHoldSeconds" />
-              </label>
-              <label>
-                Owner Beasts Refresh (ms)
-                <input type="number" data-kind="number" data-path="strategy.ownerBeastsRefreshMs" />
-              </label>
-              <label>
-                Protected Owners Refresh (ms)
-                <input type="number" data-kind="number" data-path="strategy.protectedOwnersRefreshMs" />
-              </label>
-              <label>
-                Claim Reward Threshold
-                <input type="number" step="0.0001" data-kind="number" data-path="strategy.claimRewardThreshold" />
-              </label>
-              <label>
-                Max Gas Cost STRK
-                <input type="number" step="0.001" data-kind="number" data-path="strategy.maxGasCostStrk" />
-              </label>
-            </div>
-
-            <h3>Profile Mix</h3>
-            <div class="form-grid form-grid-3">
-              <label>
-                Focused
-                <input type="number" data-kind="number" data-path="strategy.maxBeastsProfiles.focused" />
-              </label>
-              <label>
-                Balanced
-                <input type="number" data-kind="number" data-path="strategy.maxBeastsProfiles.balanced" />
-              </label>
-              <label>
-                Swarm
-                <input type="number" data-kind="number" data-path="strategy.maxBeastsProfiles.swarm" />
               </label>
             </div>
 

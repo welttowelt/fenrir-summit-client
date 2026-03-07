@@ -4,6 +4,7 @@ const els = {
   profileSelect: document.getElementById("profileSelect"),
   createProfileBtn: document.getElementById("createProfileBtn"),
   reloadProfilesBtn: document.getElementById("reloadProfilesBtn"),
+  applyChangesBtn: document.getElementById("applyChangesBtn"),
   saveConfigBtn: document.getElementById("saveConfigBtn"),
   startRunnerBtn: document.getElementById("startRunnerBtn"),
   stopRunnerBtn: document.getElementById("stopRunnerBtn"),
@@ -12,6 +13,7 @@ const els = {
   registerSessionBtn: document.getElementById("registerSessionBtn"),
   checkSessionBtn: document.getElementById("checkSessionBtn"),
   refreshStatusBtn: document.getElementById("refreshStatusBtn"),
+  nextActionHint: document.getElementById("nextActionHint"),
   refreshRawBtn: document.getElementById("refreshRawBtn"),
   applyRawBtn: document.getElementById("applyRawBtn"),
   saveRawBtn: document.getElementById("saveRawBtn"),
@@ -27,6 +29,7 @@ const els = {
   walletMeta: document.getElementById("walletMeta"),
   logPath: document.getElementById("logPath"),
   logOutput: document.getElementById("logOutput"),
+  setupSteps: Array.from(document.querySelectorAll("[data-setup-step]")),
 };
 
 const state = {
@@ -41,6 +44,10 @@ const state = {
     connected: false,
     username: "",
     address: "",
+  },
+  ui: {
+    sessionValid: false,
+    runnerRunning: false,
   },
 };
 
@@ -69,6 +76,69 @@ function setMessage(text, type = "info") {
     els.messageBar.classList.add("error");
   } else if (type === "success") {
     els.messageBar.classList.add("success");
+  }
+}
+
+function updateActionAvailability() {
+  const hasProfile = Boolean(state.profileId);
+  if (els.applyChangesBtn instanceof HTMLButtonElement) {
+    els.applyChangesBtn.disabled = !hasProfile;
+  }
+  if (els.registerSessionBtn instanceof HTMLButtonElement && !state.sessionRegistering) {
+    els.registerSessionBtn.disabled = !hasProfile;
+  }
+  if (els.checkSessionBtn instanceof HTMLButtonElement) {
+    els.checkSessionBtn.disabled = !hasProfile;
+  }
+  if (els.startRunnerBtn instanceof HTMLButtonElement) {
+    els.startRunnerBtn.disabled = !hasProfile || !state.ui.sessionValid || state.ui.runnerRunning;
+  }
+  if (els.stopRunnerBtn instanceof HTMLButtonElement) {
+    els.stopRunnerBtn.disabled = !hasProfile || !state.ui.runnerRunning;
+  }
+}
+
+function markSetupStep(stepId, mode) {
+  for (const step of els.setupSteps) {
+    if (!(step instanceof HTMLElement)) {
+      continue;
+    }
+    if (step.dataset.setupStep !== stepId) {
+      continue;
+    }
+    step.classList.remove("done", "active");
+    if (mode === "done") {
+      step.classList.add("done");
+    } else if (mode === "active") {
+      step.classList.add("active");
+    }
+  }
+}
+
+function updateSetupProgress() {
+  const profileReady = Boolean(state.profileId);
+  const walletReady = Boolean(state.wallet.connected);
+  const sessionReady = Boolean(state.ui.sessionValid);
+  const runnerReady = Boolean(state.ui.runnerRunning);
+
+  markSetupStep("profile", profileReady ? "done" : "active");
+  markSetupStep("wallet", profileReady ? (walletReady ? "done" : "active") : "idle");
+  markSetupStep("session", profileReady && walletReady ? (sessionReady ? "done" : "active") : "idle");
+  markSetupStep("runner", profileReady && walletReady && sessionReady ? (runnerReady ? "done" : "active") : "idle");
+
+  if (!(els.nextActionHint instanceof HTMLElement)) {
+    return;
+  }
+  if (!profileReady) {
+    els.nextActionHint.textContent = "Next: select or create a profile.";
+  } else if (!walletReady) {
+    els.nextActionHint.textContent = "Next: connect Cartridge wallet.";
+  } else if (!sessionReady) {
+    els.nextActionHint.textContent = "Next: register session keys and approve in Cartridge.";
+  } else if (!runnerReady) {
+    els.nextActionHint.textContent = "Next: start runner.";
+  } else {
+    els.nextActionHint.textContent = "All systems green. Runner is active.";
   }
 }
 
@@ -248,6 +318,10 @@ function resetUiForUnavailableApi() {
   if (els.rawConfigEditor instanceof HTMLTextAreaElement) {
     els.rawConfigEditor.value = "";
   }
+  state.ui.sessionValid = false;
+  state.ui.runnerRunning = false;
+  updateSetupProgress();
+  updateActionAvailability();
 }
 
 function sleep(ms) {
@@ -274,7 +348,7 @@ function openApprovalPopup() {
   return window.open("about:blank", "_blank", features);
 }
 
-async function resolveApprovalUrl(profileId, attempts = 10, delayMs = 600) {
+async function resolveApprovalUrl(profileId, attempts = 120, delayMs = 500) {
   for (let i = 0; i < attempts; i += 1) {
     const probe = await requestJson(
       `/api/profiles/${encodeURIComponent(profileId)}/session/approval-url`,
@@ -501,6 +575,11 @@ function collectConfig() {
   const friendlyPlayers = readFriendlyPlayersFromRows();
   next.strategy.friendlyPlayers = friendlyPlayers;
   next.strategy.protectedOwners = friendlyPlayers.map((player) => player.address);
+  next.strategy.sendAllBeasts = true;
+  next.strategy.maxBeastsPerAttack = 1;
+  next.strategy.attackCountPerBeast = 1;
+  next.strategy.burstEnabled = false;
+  next.strategy.extraLifeOnlyForHoldQuest = true;
 
   return next;
 }
@@ -579,11 +658,15 @@ function refreshWalletCard() {
     const username = state.wallet.username ? `@${state.wallet.username}` : "username unavailable";
     const address = state.wallet.address || "address unavailable";
     els.walletMeta.textContent = `${username} | ${address}`;
+    updateSetupProgress();
+    updateActionAvailability();
     return;
   }
 
   setWalletChip("Disconnected", "off");
   els.walletMeta.textContent = "Connect Cartridge to bind a user wallet.";
+  updateSetupProgress();
+  updateActionAvailability();
 }
 
 function isBenignDisconnectErrorMessage(message) {
@@ -815,6 +898,8 @@ async function loadProfiles(preferredProfileId) {
     els.profileSelect.appendChild(opt);
     state.profileId = "";
     state.config = null;
+    state.ui.sessionValid = false;
+    state.ui.runnerRunning = false;
     els.profileBadge.textContent = "No profile";
     setRunnerChip("No profile", "off");
     setSessionChip("No profile", "off");
@@ -827,6 +912,8 @@ async function loadProfiles(preferredProfileId) {
       els.rawConfigEditor.value = "";
     }
     refreshWalletCard();
+    updateSetupProgress();
+    updateActionAvailability();
     return;
   }
 
@@ -837,10 +924,13 @@ async function loadProfiles(preferredProfileId) {
     els.profileSelect.appendChild(opt);
   }
 
-  const chosen =
-    (preferredProfileId && profiles.some((p) => p.profileId === preferredProfileId) && preferredProfileId) ||
-    (state.profileId && profiles.some((p) => p.profileId === state.profileId) && state.profileId) ||
-    profiles[0].profileId;
+  const chosen = profiles.some((p) => p.profileId === DEFAULT_PROFILE_ID)
+    ? DEFAULT_PROFILE_ID
+    : (
+      (preferredProfileId && profiles.some((p) => p.profileId === preferredProfileId) && preferredProfileId) ||
+      (state.profileId && profiles.some((p) => p.profileId === state.profileId) && state.profileId) ||
+      profiles[0].profileId
+    );
 
   if (chosen !== state.profileId || !state.config) {
     els.profileSelect.value = chosen;
@@ -887,13 +977,19 @@ async function loadProfile(profileId) {
 
   await Promise.all([refreshRunnerStatus(), refreshSessionStatus()]);
   startPolling();
+  updateSetupProgress();
+  updateActionAvailability();
   setMessage(`Loaded profile ${profileId}`, "success");
 }
 
 async function saveConfig() {
+  return applyConfig(true);
+}
+
+async function applyConfig(showMessage = true) {
   if (!state.profileId) {
     setMessage("No profile selected.", "error");
-    return;
+    return null;
   }
 
   const nextConfig = collectConfig();
@@ -904,8 +1000,11 @@ async function saveConfig() {
 
   state.config = result.config;
   populateForm(state.config);
-  setMessage(`Saved ${state.profileId} config`, "success");
+  if (showMessage) {
+    setMessage("Changes applied", "success");
+  }
   await loadProfiles(state.profileId);
+  return result;
 }
 
 async function saveRawConfig() {
@@ -965,8 +1064,10 @@ async function refreshRunnerStatus() {
 
   if (status.running) {
     setRunnerChip("Running", "on");
+    state.ui.runnerRunning = true;
   } else {
     setRunnerChip("Stopped", "off");
+    state.ui.runnerRunning = false;
   }
 
   const pidText = status.processes.length
@@ -986,6 +1087,8 @@ async function refreshRunnerStatus() {
   } else {
     els.logOutput.textContent = "No logs yet for this profile.";
   }
+  updateSetupProgress();
+  updateActionAvailability();
 }
 
 async function refreshSessionStatus() {
@@ -998,23 +1101,33 @@ async function refreshSessionStatus() {
   if (status.present && !status.expired) {
     setSessionChip("Session Valid", "on");
     els.sessionMeta.textContent = `User: ${status.username} | Expires in: ${status.expiresIn}`;
+    state.ui.sessionValid = true;
+    updateSetupProgress();
+    updateActionAvailability();
     return;
   }
 
   if (status.present && status.expired) {
     setSessionChip("Session Expired", "warn");
     els.sessionMeta.textContent = `Session exists but expired (${status.expiresIn}). Re-register.`;
+    state.ui.sessionValid = false;
+    updateSetupProgress();
+    updateActionAvailability();
     return;
   }
 
   setSessionChip("No Session", "off");
   els.sessionMeta.textContent = status.error || "No session file available";
+  state.ui.sessionValid = false;
+  updateSetupProgress();
+  updateActionAvailability();
 }
 
 async function startRunner() {
   if (!state.profileId) {
     return;
   }
+  await applyConfig(false);
   await requestJson(`/api/profiles/${encodeURIComponent(state.profileId)}/start`, { method: "POST" });
   setMessage(`Runner started for ${state.profileId}`, "success");
   await refreshRunnerStatus();
@@ -1046,12 +1159,13 @@ async function registerSession() {
     button.disabled = true;
     button.textContent = "Registering…";
   }
+  updateActionAvailability();
 
   try {
     const create = await requestJson(`/api/profiles/${encodeURIComponent(state.profileId)}/session/create`, {
       method: "POST",
     });
-    const approvalUrl = (await resolveApprovalUrl(state.profileId, 20, 500)) || create.approvalUrl;
+    const approvalUrl = (await resolveApprovalUrl(state.profileId)) || create.approvalUrl;
     if (!approvalUrl) {
       throw new Error(`Could not get approval URL. Log: ${create.logFile}`);
     }
@@ -1077,6 +1191,7 @@ async function registerSession() {
       button.disabled = false;
       button.textContent = previousLabel;
     }
+    updateActionAvailability();
   }
 }
 
@@ -1133,6 +1248,14 @@ function bindUi() {
   els.saveConfigBtn.addEventListener("click", async () => {
     try {
       await saveConfig();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err), "error");
+    }
+  });
+
+  els.applyChangesBtn?.addEventListener("click", async () => {
+    try {
+      await applyConfig(true);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : String(err), "error");
     }
@@ -1259,6 +1382,8 @@ function bindUi() {
 async function init() {
   bindUi();
   refreshWalletCard();
+  updateSetupProgress();
+  updateActionAvailability();
   setMessage("Loading profiles...");
 
   try {

@@ -304,7 +304,7 @@ async function clearSession(profileId: string): Promise<{ sessionFile: string; c
   return { sessionFile, cleared: true };
 }
 
-async function waitForApprovalUrl(profileId: string, attempts = 25, delayMs = 200): Promise<string | null> {
+async function waitForApprovalUrl(profileId: string, attempts = 120, delayMs = 500): Promise<string | null> {
   for (let i = 0; i < attempts; i += 1) {
     const url = await readSessionApprovalUrl(profileId);
     if (url) {
@@ -334,11 +334,13 @@ async function readSessionApprovalUrl(profileId: string): Promise<string | null>
   }
 
   const text = await fs.readFile(logPath, "utf-8");
-  const matches = Array.from(text.matchAll(/Open url to authorize session:\s*(https:\/\/\S+)/g));
-  if (matches.length === 0) {
-    return null;
-  }
-  const raw = matches[matches.length - 1]?.[1] ?? null;
+  const explicitMatches = Array.from(
+    text.matchAll(/open\s+url\s+to\s+authorize\s+session:\s*(https:\/\/\S+)/gi),
+  );
+  const genericMatches = Array.from(text.matchAll(/(https:\/\/x\.cartridge\.gg\/session\?\S+)/g));
+  const lastExplicit = explicitMatches[explicitMatches.length - 1]?.[1] ?? null;
+  const lastGeneric = genericMatches[genericMatches.length - 1]?.[1] ?? null;
+  const raw = lastExplicit ?? lastGeneric;
   if (!raw) {
     return null;
   }
