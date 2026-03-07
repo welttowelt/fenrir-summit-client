@@ -2,6 +2,42 @@
 
 Autonomous Starknet bot for the **Loot Survivor Summit** game. Continuously monitors the summit, ranks your beasts, and attacks the holder to earn `$SURVIVOR` rewards.
 
+## Quick Start (New User)
+
+This repo is designed to run **locally on your own machine** with your own Cartridge wallet/session.
+
+1. Clone and install:
+
+```bash
+git clone https://github.com/GravitySignal/fenrir-summit-client.git
+cd fenrir-summit-client
+npm install
+```
+
+2. (Recommended) enable commit safety checks:
+
+```bash
+npm run hooks:install
+```
+
+3. Start local cockpit:
+
+```bash
+npm run cockpit:user
+```
+
+4. Open:
+
+`http://127.0.0.1:8788`
+
+5. In cockpit UI:
+- Click `Connect Cartridge`
+- Click `Register Session` and approve in your browser wallet flow
+- Tune settings if needed
+- Click `Start Runner`
+
+No manual API input is required in local user mode.
+
 ## How It Works
 
 The Summit is a king-of-the-hill game in Loot Survivor. One beast holds the summit at a time, earning `0.007 $SURVIVOR/sec`. Anyone can attack the holder with their beasts. If you win, your beast takes the summit and you start earning.
@@ -201,4 +237,19 @@ Attack events are logged to `data/yourprofile/events.jsonl` in structured JSONL 
 
 ## License
 
-Private — Trisolaris
+UNLICENSED
+
+## Public Safety Checklist
+
+Before pushing changes to this public repo:
+
+1. Run the scanner:
+
+```bash
+npm run safety:public
+```
+
+2. Ensure private runtime files are not tracked (`config/*.json`, `data/*`, `public-data/*`, sessions, logs).
+3. Never commit personal wallet addresses, usernames, local machine paths, or API keys.
+
+The pre-commit hook (installed via `npm run hooks:install`) blocks known personal identifiers and common secrets automatically.

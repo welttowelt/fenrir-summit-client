@@ -1,10 +1,13 @@
 {
-  "name": "summit-agent",
+  "name": "fenrir-summit-client",
   "version": "1.0.0",
   "type": "module",
-  "description": "Summit Autopilot Agent for Loot Survivor",
+  "description": "Public local-first cockpit for Loot Survivor Summit runners",
   "scripts": {
     "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "safety:public": "node scripts/public-safety-check.mjs",
+    "hooks:install": "node scripts/setup-git-hooks.mjs",
     "cockpit": "tsx src/cockpit/server.ts",
     "cockpit:public": "COCKPIT_PUBLIC_MODE=1 tsx src/cockpit/server.ts",
     "cockpit:user": "COCKPIT_PUBLIC_MODE=1 COCKPIT_HOST=127.0.0.1 tsx src/cockpit/server.ts",
