@@ -122,6 +122,71 @@ body {
   font-size: 1rem;
 }
 
+.battle-dashboard {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.battle-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.battle-stat {
+  border: 1px solid rgba(170, 244, 190, 0.22);
+  border-radius: 11px;
+  padding: 10px;
+  background: rgba(7, 30, 21, 0.66);
+}
+
+.battle-label {
+  margin: 0 0 4px;
+  color: #a9d8bf;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.battle-value {
+  margin: 0;
+  color: #ecffd6;
+  font-size: 1.34rem;
+  font-weight: 700;
+}
+
+.share-card {
+  border: 1px solid rgba(170, 244, 190, 0.22);
+  border-radius: 11px;
+  padding: 10px;
+  background: rgba(7, 30, 21, 0.76);
+}
+
+.share-card h3 {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--accent-strong);
+}
+
+.share-text {
+  margin: 8px 0;
+  white-space: pre-wrap;
+  border: 1px solid rgba(145, 224, 170, 0.2);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(2, 14, 10, 0.88);
+  color: #d6ffe7;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.share-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .message {
   margin-top: 14px;
   padding: 10px 12px;
@@ -586,6 +651,10 @@ summary {
     grid-template-columns: 1fr;
   }
 
+  .battle-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .setup-rail {
     width: 100%;
     justify-self: stretch;
@@ -606,6 +675,14 @@ summary {
 }
 
 @media (max-width: 560px) {
+  .battle-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .share-actions {
+    grid-template-columns: 1fr;
+  }
+
   .actions {
     grid-template-columns: 1fr;
   }

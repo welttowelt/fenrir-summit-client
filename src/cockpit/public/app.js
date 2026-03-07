@@ -1,5 +1,14 @@
 const els = {
   messageBar: document.getElementById("messageBar"),
+  statActions: document.getElementById("statActions"),
+  statPoison: document.getElementById("statPoison"),
+  statRewards: document.getElementById("statRewards"),
+  statSignals: document.getElementById("statSignals"),
+  statErrors: document.getElementById("statErrors"),
+  statRunnerMode: document.getElementById("statRunnerMode"),
+  shareCardText: document.getElementById("shareCardText"),
+  copyShareBtn: document.getElementById("copyShareBtn"),
+  tweetShareBtn: document.getElementById("tweetShareBtn"),
   profileBadge: document.getElementById("profileBadge"),
   profileSelect: document.getElementById("profileSelect"),
   createProfileBtn: document.getElementById("createProfileBtn"),
@@ -49,6 +58,15 @@ const state = {
     sessionValid: false,
     runnerRunning: false,
     configDirty: false,
+    battleStats: {
+      actions: 0,
+      poison: 0,
+      rewards: 0,
+      signals: 0,
+      errors: 0,
+      runnerMode: "Idle",
+      lastSignal: "No signal yet",
+    },
   },
 };
 
@@ -78,6 +96,66 @@ function setMessage(text, type = "info") {
   } else if (type === "success") {
     els.messageBar.classList.add("success");
   }
+}
+
+function setText(el, value) {
+  if (el instanceof HTMLElement) {
+    el.textContent = String(value);
+  }
+}
+
+function summarizeBattleStats(logTail, running) {
+  const lines = String(logTail || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  let actions = 0;
+  let poison = 0;
+  let rewards = 0;
+  let signals = 0;
+  let errors = 0;
+
+  for (const line of lines) {
+    if (/\battack|attacked|attacking\b/i.test(line)) actions += 1;
+    if (/\bpoison|apply_poison\b/i.test(line)) poison += 1;
+    if (/\bclaim_rewards|claim reward|claimed reward\b/i.test(line)) rewards += 1;
+    if (/\bsummit|holder|transition|hp|tick\b/i.test(line)) signals += 1;
+    if (/\berror\b|\bfailed\b|\bexception\b/i.test(line)) errors += 1;
+  }
+
+  const lastSignal = lines.length > 0 ? lines[lines.length - 1].slice(0, 120) : "No signal yet";
+  return {
+    actions,
+    poison,
+    rewards,
+    signals,
+    errors,
+    runnerMode: running ? "Live" : "Idle",
+    lastSignal,
+  };
+}
+
+function renderBattleStats() {
+  const stats = state.ui.battleStats;
+  setText(els.statActions, stats.actions);
+  setText(els.statPoison, stats.poison);
+  setText(els.statRewards, stats.rewards);
+  setText(els.statSignals, stats.signals);
+  setText(els.statErrors, stats.errors);
+  setText(els.statRunnerMode, stats.runnerMode);
+
+  const profile = state.profileId || "runner";
+  const shareText = [
+    "Fenrir Summit Client | Battle Snapshot",
+    `Profile: ${profile}`,
+    `Mode: ${stats.runnerMode}`,
+    `Actions: ${stats.actions} | Poison: ${stats.poison} | Rewards: ${stats.rewards}`,
+    `Signals: ${stats.signals} | Errors: ${stats.errors}`,
+    `Last signal: ${stats.lastSignal}`,
+    "#FenrirSummit #Starknet",
+  ].join("\n");
+  setText(els.shareCardText, shareText);
 }
 
 function markConfigDirty() {
@@ -341,6 +419,8 @@ function resetUiForUnavailableApi() {
   state.ui.sessionValid = false;
   state.ui.runnerRunning = false;
   state.ui.configDirty = false;
+  state.ui.battleStats = summarizeBattleStats("", false);
+  renderBattleStats();
   updateSetupProgress();
   updateActionAvailability();
 }
@@ -1111,6 +1191,8 @@ async function refreshRunnerStatus() {
   } else {
     els.logOutput.textContent = "No logs yet for this profile.";
   }
+  state.ui.battleStats = summarizeBattleStats(status.logTail || "", Boolean(status.running));
+  renderBattleStats();
   updateSetupProgress();
   updateActionAvailability();
 }
@@ -1411,10 +1493,34 @@ function bindUi() {
 
   els.friendlyPlayersList?.addEventListener("input", markConfigDirty);
   els.friendlyPlayersList?.addEventListener("change", markConfigDirty);
+
+  els.copyShareBtn?.addEventListener("click", async () => {
+    try {
+      if (!(els.shareCardText instanceof HTMLElement)) {
+        throw new Error("Share card not available.");
+      }
+      await navigator.clipboard.writeText(els.shareCardText.textContent || "");
+      setMessage("Share card copied.", "success");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err), "error");
+    }
+  });
+
+  els.tweetShareBtn?.addEventListener("click", () => {
+    if (!(els.shareCardText instanceof HTMLElement)) {
+      setMessage("Share card not available.", "error");
+      return;
+    }
+    const text = els.shareCardText.textContent || "";
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  });
 }
 
 async function init() {
   bindUi();
+  state.ui.battleStats = summarizeBattleStats("", false);
+  renderBattleStats();
   refreshWalletCard();
   updateSetupProgress();
   updateActionAvailability();

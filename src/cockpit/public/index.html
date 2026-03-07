@@ -18,6 +18,49 @@
             <p class="hero-summary">A faster Summit interface built for contested battles.</p>
             <p class="hero-value">Control the Summit with speed and clarity.</p>
             <div id="messageBar" class="message">Ready.</div>
+
+            <section class="battle-dashboard">
+              <div class="panel-title-row">
+                <h2>Battle Statistics</h2>
+              </div>
+              <div class="battle-stats-grid">
+                <article class="battle-stat">
+                  <p class="battle-label">Actions</p>
+                  <p id="statActions" class="battle-value">0</p>
+                </article>
+                <article class="battle-stat">
+                  <p class="battle-label">Poison Casts</p>
+                  <p id="statPoison" class="battle-value">0</p>
+                </article>
+                <article class="battle-stat">
+                  <p class="battle-label">Rewards Claimed</p>
+                  <p id="statRewards" class="battle-value">0</p>
+                </article>
+                <article class="battle-stat">
+                  <p class="battle-label">Summit Signals</p>
+                  <p id="statSignals" class="battle-value">0</p>
+                </article>
+                <article class="battle-stat">
+                  <p class="battle-label">Errors</p>
+                  <p id="statErrors" class="battle-value">0</p>
+                </article>
+                <article class="battle-stat">
+                  <p class="battle-label">Runner State</p>
+                  <p id="statRunnerMode" class="battle-value">Idle</p>
+                </article>
+              </div>
+
+              <article class="share-card">
+                <div class="panel-title-row">
+                  <h3>Shareable Card</h3>
+                </div>
+                <pre id="shareCardText" class="share-text">Fenrir Summit Client | Battle stats loading...</pre>
+                <div class="share-actions">
+                  <button id="copyShareBtn" class="btn btn-soft">Copy Card</button>
+                  <button id="tweetShareBtn" class="btn btn-amber">Share to Twitter</button>
+                </div>
+              </article>
+            </section>
           </div>
 
           <aside class="setup-rail">
