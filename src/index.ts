@@ -1143,7 +1143,7 @@ async function executeAttackWithRetry(
   const MAX_ATTEMPTS = 50;
   const OVER_CAP_REVIVAL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
   const PREFER_API_PRECHECK_MAX_COOLDOWN_MS = 2 * 60 * 1000;
-  const STALE_DEAD_RESELECT_LIMIT = 1;
+  const STALE_DEAD_RESELECT_LIMIT = 3;
   const REVIVAL_STUCK_RETRY_LIMIT = Math.max(
     2,
     Math.floor(Number(process.env.FENRIR_REVIVAL_STUCK_RETRY_LIMIT ?? 4))
