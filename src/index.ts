@@ -574,11 +574,13 @@ async function main() {
   await chain.init();
   logger.info("Chain client initialized");
 
-  // WebSocket for real-time events (informational only)
+  // WebSocket for real-time events — triggers early poll on holder changes
+  let wsHolderChanged = false;
   const ws = new SummitWsClient(config.api.wsUrl, logger);
   ws.onEvent((channel, data) => {
     if (channel === "summit_change" || channel === "beast_killed") {
       logger.info(`WS event: ${channel}`, data as Record<string, unknown>);
+      wsHolderChanged = true;
     }
   });
   ws.start();
@@ -762,11 +764,20 @@ async function main() {
       if (ourBeastsRawWithLive.length > 0 && ourBeastsRaw.length === 0) {
         const aliveInSnapshot = ownerCache.enriched.filter((b) => b.isAlive).length;
         if (ownerCache.liveMismatchFallback || aliveInSnapshot > 0) {
-          beastCooldownExclusions.clear();
-          ourBeastsRaw = ourBeastsRawWithLive;
-          ourBeastsEnriched = ownerCache.enriched;
+          // Only clear expired exclusions — don't re-introduce beasts with valid cooldowns
+          // (e.g. death-mountain 24h) that will just fail again immediately.
+          const nowMs = Date.now();
+          for (const [tokenId, expiry] of beastCooldownExclusions) {
+            if (expiry <= nowMs) beastCooldownExclusions.delete(tokenId);
+          }
+          ourBeastsRaw = ourBeastsRawWithLive.filter(
+            (b) => !beastCooldownExclusions.has(b.token_id)
+          );
+          ourBeastsEnriched = ownerCache.enriched.filter(
+            (b) => !beastCooldownExclusions.has(b.token_id)
+          );
           logger.warn(
-            `[RECOVERY] All ${ourBeastsRawWithLive.length} beasts were cooldown-excluded (aliveInSnapshot=${aliveInSnapshot}, apiFallback=${ownerCache.liveMismatchFallback}) — cleared exclusions`
+            `[RECOVERY] All beasts were cooldown-excluded (aliveInSnapshot=${aliveInSnapshot}, apiFallback=${ownerCache.liveMismatchFallback}) — cleared expired exclusions, ${beastCooldownExclusions.size} still active`
           );
         }
       }
@@ -828,6 +839,8 @@ async function main() {
         }
       }
 
+      // ── Single protected-owner check (reused for both attack and poison) ──
+      let holderIsProtected = false;
       if (holderRaw && protectedOwners.length > 0) {
         const missingCoverage = protectedOwners.some(
           (owner) => !protectedTokenIdsByOwner.has(owner)
@@ -839,40 +852,37 @@ async function main() {
           continue;
         }
 
-        const isProtectedByToken = [...protectedTokenIdsByOwner.values()].some((ids) =>
+        holderIsProtected = [...protectedTokenIdsByOwner.values()].some((ids) =>
           ids.has(holderRaw.token_id)
         );
-        if (isProtectedByToken) {
-          logger.info(`[PROTECT] Skipping protected summit holder token=${holderRaw.token_id}`);
-          await sleep(config.api.pollIntervalMs);
-          consecutiveErrors = 0;
-          continue;
-        }
 
         // Fallback: if token isn't in the cached set, check the on-chain owner
         // directly. This catches beasts missed by pagination or acquired after
         // the last protected-owner refresh.
-        try {
-          const holderOwner = await chain.getBeastOwner(holderRaw.token_id);
-          if (holderOwner && protectedOwners.includes(holderOwner)) {
-            logger.info(
-              `[PROTECT] Skipping protected summit holder token=${holderRaw.token_id} (owner fallback: ${holderOwner})`
-            );
-            // Add to cache so future checks are instant
-            for (const [owner, ids] of protectedTokenIdsByOwner) {
-              if (owner === holderOwner) {
-                ids.add(holderRaw.token_id);
-                break;
+        if (!holderIsProtected) {
+          try {
+            const holderOwner = await chain.getBeastOwner(holderRaw.token_id);
+            if (holderOwner && protectedOwners.includes(holderOwner)) {
+              holderIsProtected = true;
+              // Add to cache so future checks are instant
+              for (const [owner, ids] of protectedTokenIdsByOwner) {
+                if (owner === holderOwner) {
+                  ids.add(holderRaw.token_id);
+                  break;
+                }
               }
             }
-            await sleep(config.api.pollIntervalMs);
-            consecutiveErrors = 0;
-            continue;
+          } catch (ownerErr) {
+            // Can't verify — treat as protected to avoid friendly fire
+            holderIsProtected = true;
+            logger.warn(
+              `[PROTECT] Owner fallback lookup failed for token=${holderRaw.token_id}; treating as protected: ${serializeError(ownerErr).substring(0, 220)}`
+            );
           }
-        } catch (ownerErr) {
-          logger.warn(
-            `[PROTECT] Owner fallback lookup failed for token=${holderRaw.token_id}; skipping attack cycle to avoid friendly fire: ${serializeError(ownerErr).substring(0, 220)}`
-          );
+        }
+
+        if (holderIsProtected) {
+          logger.info(`[PROTECT] Skipping protected summit holder token=${holderRaw.token_id}`);
           await sleep(config.api.pollIntervalMs);
           consecutiveErrors = 0;
           continue;
@@ -883,44 +893,19 @@ async function main() {
         const holderIsOurs = ourBeastsRawWithLive.some(
           (beast) => beast.token_id === holderRaw.token_id
         );
-        // Also skip poison for protected owners (safety belt — main check
-        // already `continue`s above, but this guards against fallback failure).
-        let poisonProtected = false;
-        if (!holderIsOurs && protectedOwners.length > 0) {
-          poisonProtected = [...protectedTokenIdsByOwner.values()].some((ids) =>
-            ids.has(holderRaw.token_id)
-          );
-          if (!poisonProtected) {
-            try {
-              const holderOwner = await chain.getBeastOwner(holderRaw.token_id);
-              if (holderOwner && protectedOwners.includes(holderOwner)) {
-                poisonProtected = true;
-                // Add to cache so future checks are instant
-                for (const [owner, ids] of protectedTokenIdsByOwner) {
-                  if (owner === holderOwner) {
-                    ids.add(holderRaw.token_id);
-                    break;
-                  }
-                }
-              }
-            } catch {
-              // Best effort — skip poison to be safe.
-              poisonProtected = true;
-            }
-          }
-        }
+        // holderIsProtected already checked above — no need for second RPC call
         if (holderIsOurs) {
           logger.debug(
             `[POISON] Skip: holder token=${holderRaw.token_id} belongs to our account`
           );
-        } else if (poisonProtected) {
+        } else if (holderIsProtected) {
           logger.info(
             `[PROTECT] Skipping poison for protected holder token=${holderRaw.token_id}`
           );
         } else {
           const extraLives = Number(holderRaw.extra_lives ?? 0);
           const threshold = Math.max(0, config.strategy.poisonHolderExtraLivesThreshold);
-          if (extraLives > threshold) {
+          if (extraLives > 0 && extraLives >= threshold) {
             const holderId = holderRaw.token_id;
             const now = Date.now();
             const cooldownMs = Math.max(1_000, config.strategy.poisonCooldownMs);
@@ -1136,15 +1121,20 @@ async function main() {
 
       if (action.type === "wait") {
         logger.debug(`Wait: ${action.reason}`);
-        if (action.reason.startsWith("Cooldown")) {
-          const cooldownSleepMs = Math.max(
-            250,
-            Math.min(config.api.pollIntervalMs, Math.floor(config.strategy.attackCooldownMs / 2))
-          );
-          await sleep(cooldownSleepMs);
-        } else {
-          await sleep(config.api.pollIntervalMs);
+        // Use short-polling so WS holder-change events wake us up early
+        const targetSleepMs = action.reason.startsWith("Cooldown")
+          ? Math.max(250, Math.min(config.api.pollIntervalMs, Math.floor(config.strategy.attackCooldownMs / 2)))
+          : config.api.pollIntervalMs;
+        const sliceMs = 500;
+        for (let waited = 0; waited < targetSleepMs; waited += sliceMs) {
+          if (wsHolderChanged) {
+            wsHolderChanged = false;
+            logger.info("[WS] Holder changed — waking early from wait");
+            break;
+          }
+          await sleep(Math.min(sliceMs, targetSleepMs - waited));
         }
+        wsHolderChanged = false;
         consecutiveErrors = 0;
         continue;
       }
@@ -1203,9 +1193,11 @@ async function executeAttackWithRetry(
   const OVER_CAP_REVIVAL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
   const PREFER_API_PRECHECK_MAX_COOLDOWN_MS = 2 * 60 * 1000;
   const STALE_DEAD_RESELECT_LIMIT = 3;
+  // Reduced from 4→2: each oscillation wastes an on-chain tx (gas).
+  // 2 attempts is enough to detect budget mismatch before excluding.
   const REVIVAL_STUCK_RETRY_LIMIT = Math.max(
     2,
-    Math.floor(Number(process.env.FENRIR_REVIVAL_STUCK_RETRY_LIMIT ?? 4))
+    Math.floor(Number(process.env.FENRIR_REVIVAL_STUCK_RETRY_LIMIT ?? 2))
   );
   const maxRevivalPotionsPerBeast = Math.min(
     HARD_MAX_REVIVAL_POTIONS_PER_BEAST,
@@ -1440,10 +1432,13 @@ async function executeAttackWithRetry(
     if (ownerCache.enriched.length > 0 && refreshedBeasts.length === 0) {
       const aliveInSnapshot = ownerCache.enriched.filter((beast) => beast.isAlive).length;
       if (ownerCache.liveMismatchFallback || aliveInSnapshot > 0) {
-        beastCooldownExclusions.clear();
-        refreshedBeasts = ownerCache.enriched;
+        // Only clear expired exclusions — preserve valid cooldowns (death-mountain, etc.)
+        sweepExpiredCooldowns();
+        refreshedBeasts = ownerCache.enriched.filter(
+          (beast) => !beastCooldownExclusions.has(beast.token_id)
+        );
         logger.warn(
-          `[L0] Refresh recovered from full cooldown exclusion (aliveInSnapshot=${aliveInSnapshot}, apiFallback=${ownerCache.liveMismatchFallback})`
+          `[L0] Refresh recovered from full cooldown exclusion (aliveInSnapshot=${aliveInSnapshot}, apiFallback=${ownerCache.liveMismatchFallback}, stillExcluded=${beastCooldownExclusions.size})`
         );
       }
     }

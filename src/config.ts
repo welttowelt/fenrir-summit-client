@@ -26,6 +26,7 @@ export const ConfigSchema = z.object({
     avoidTypeDisadvantage: z.boolean().default(false),
     requireTypeAdvantage: z.boolean().default(false),
     minScoreToAttack: z.number().default(10),
+    minHolderPowerToAttack: z.number().int().nonnegative().default(0),
     claimRewardThreshold: z.number().default(0.001),
     maxGasCostStrk: z.number().default(0.1),
     attackCooldownMs: z.number().int().default(30_000),

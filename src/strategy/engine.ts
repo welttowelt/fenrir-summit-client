@@ -104,6 +104,12 @@ export class StrategyEngine {
       });
     }
 
+    const minHolderPower = this.config.strategy.minHolderPowerToAttack;
+    if (minHolderPower > 0 && summitHolder.basePower < minHolderPower) {
+      this.logger.info(`Skipping holder: power ${summitHolder.basePower} < min ${minHolderPower}`);
+      return { type: "wait" as const, reason: `Holder power ${summitHolder.basePower} below min ${minHolderPower}` };
+    }
+
     const now = Date.now();
     const timeSinceAttack = now - this.lastAttackAt;
     if (timeSinceAttack < this.config.strategy.attackCooldownMs) {
@@ -299,34 +305,8 @@ export class StrategyEngine {
     const primary = attackers[0];
     const holderExtraLives = Number(summitHolder.extra_lives ?? 0);
 
+    // Compute attack count per primary beast, respecting revival budget.
     if (primary) {
-      // Keep attack/boost values moving instead of static repeats.
-      const attackCountRotation = [0, 1, 0, 1, 2];
-      const attackPotionRotation = [0, 2, 1, 3, 2];
-      const countOffset =
-        attackCountRotation[this.attackCount % attackCountRotation.length] ?? 0;
-      const potionOffset =
-        attackPotionRotation[this.attackCount % attackPotionRotation.length] ?? 0;
-
-      let adaptiveCountOffset = 0;
-      let adaptivePotionOffset = 0;
-      if (holderExtraLives >= 1) adaptivePotionOffset += 1;
-      if (holderExtraLives >= 3) {
-        adaptiveCountOffset += 1;
-        adaptivePotionOffset += 2;
-      }
-      if (primary.typeAdvantage < 1) {
-        adaptivePotionOffset += 1;
-      } else if (primary.typeAdvantage > 1) {
-        adaptiveCountOffset += 1;
-        adaptivePotionOffset += 2;
-      }
-      if (primary.basePower < summitHolder.basePower) {
-        adaptivePotionOffset += 2;
-      }
-
-      const desiredAttackCount =
-        Math.max(1, attackCountPerBeast + countOffset + adaptiveCountOffset);
       const maxAttackCountByBudget = this.getMaxAttackCountWithinRevivalBudget(
         Number(primary.revival_count ?? 0),
         maxRevivalPotionsPerBeast,
@@ -334,56 +314,31 @@ export class StrategyEngine {
       );
       primaryAttackCount = Math.max(
         1,
-        Math.min(10, Math.min(desiredAttackCount, maxAttackCountByBudget))
+        Math.min(10, Math.min(attackCountPerBeast, maxAttackCountByBudget))
       );
 
-      if (this.config.strategy.useAttackPotions) {
-        primaryAttackPotions = Math.max(
-          0,
-          Math.min(200, potionsPerBeast + potionOffset + adaptivePotionOffset)
+      // Burst mode: more attacks when holder has many extra lives and we have type advantage
+      const burstWindow =
+        this.config.strategy.burstEnabled &&
+        holderExtraLives >= this.config.strategy.burstExtraLivesThreshold &&
+        primary.typeAdvantage >= this.config.strategy.burstMinTypeAdvantage;
+
+      if (burstWindow) {
+        const desiredAttackCount = Math.max(
+          attackCountPerBeast,
+          this.config.strategy.burstAttackCountPerBeast
         );
+        primaryAttackCount = Math.max(1, Math.min(desiredAttackCount, maxAttackCountByBudget));
+
+        if (primaryAttackCount > attackCountPerBeast) {
+          this.logger.info(
+            `[BURST] ${primary.fullName}: atkCount ${attackCountPerBeast}→${primaryAttackCount}, holderExtraLives=${holderExtraLives}`
+          );
+        }
       }
     }
 
-    const burstWindow =
-      this.config.strategy.burstEnabled &&
-      holderExtraLives >= this.config.strategy.burstExtraLivesThreshold &&
-      !!primary &&
-      primary.typeAdvantage >= this.config.strategy.burstMinTypeAdvantage;
-
-    if (burstWindow && primary) {
-      const desiredAttackCount = Math.max(
-        attackCountPerBeast,
-        this.config.strategy.burstAttackCountPerBeast
-      );
-      const maxByBudget = this.getMaxAttackCountWithinRevivalBudget(
-        Number(primary.revival_count ?? 0),
-        maxRevivalPotionsPerBeast,
-        primary.isAlive
-      );
-      primaryAttackCount = Math.max(1, Math.min(desiredAttackCount, maxByBudget));
-      if (this.config.strategy.useAttackPotions) {
-        primaryAttackPotions = Math.max(
-          potionsPerBeast,
-          this.config.strategy.burstAttackPotionsPerBeast
-        );
-      }
-
-      if (
-        primaryAttackCount > attackCountPerBeast ||
-        primaryAttackPotions > potionsPerBeast
-      ) {
-        const estimatedRevives = this.estimateRevivalBudgetForAttackCount(
-          Number(primary.revival_count ?? 0),
-          primaryAttackCount,
-          primary.isAlive
-        );
-        this.logger.info(
-          `[BURST] ${primary.fullName}: atkCount ${attackCountPerBeast}→${primaryAttackCount}, atkPotions ${potionsPerBeast}→${primaryAttackPotions}, estRevives=${estimatedRevives}, holderExtraLives=${holderExtraLives}`
-        );
-      }
-    }
-
+    // Attack potions: always use the fixed config value (no adaptive offsets)
     const fixedAttackPotionsPerBeast = this.config.strategy.useAttackPotions
       ? Math.max(1, Math.floor(this.config.strategy.attackPotionsPerBeast))
       : 0;
@@ -963,23 +918,16 @@ export class StrategyEngine {
     maxRevivalBudget: number,
     isAlive: boolean
   ): number {
-    const budget = Math.max(0, Math.floor(maxRevivalBudget));
-    const ceiling = Math.max(20, this.config.strategy.burstAttackCountPerBeast);
-
-    let best = isAlive ? 1 : 0;
-    for (let attackCount = 1; attackCount <= ceiling; attackCount++) {
-      const needed = this.estimateRevivalBudgetForAttackCount(
-        revivalCount,
-        attackCount,
-        isAlive
-      );
-      if (needed <= budget) {
-        best = attackCount;
-        continue;
-      }
-      break;
+    // Alive beasts need 0 revival potions — any attack count is fine.
+    if (isAlive) {
+      return Math.max(20, this.config.strategy.burstAttackCountPerBeast);
     }
-
-    return Math.max(1, best);
+    // Dead beasts always need (revivalCount + 1) potions regardless of attack count.
+    // Either the budget covers it or it doesn't — no need to loop.
+    const needed = Math.max(0, Math.floor(revivalCount)) + 1;
+    const budget = Math.max(0, Math.floor(maxRevivalBudget));
+    return needed <= budget
+      ? Math.max(20, this.config.strategy.burstAttackCountPerBeast)
+      : 1; // Can't afford revival — minimum attack count
   }
 }
