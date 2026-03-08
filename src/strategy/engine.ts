@@ -724,6 +724,9 @@ export class StrategyEngine {
       const questDiff = this.getQuestMaxAttackStreak(a) - this.getQuestMaxAttackStreak(b);
       if (questDiff !== 0) return questDiff;
 
+      // Type-advantaged beasts first: fill swarm slots with 1.5x before 1.0x.
+      if (a.typeAdvantage !== b.typeAdvantage) return b.typeAdvantage - a.typeAdvantage;
+
       // Finish beasts closest to streak 10 first.
       const streakDiff = this.getAttackStreak(b) - this.getAttackStreak(a);
       if (streakDiff !== 0) return streakDiff;
