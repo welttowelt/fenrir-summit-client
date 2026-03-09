@@ -602,6 +602,7 @@ async function main() {
   const protectedTokenIdsByOwner = new Map<string, Set<number>>();
   let lastProtectedRefreshAt = 0;
   const lastPoisonAtByHolder = new Map<number, number>();
+  const lastAllyExtraLifeAt = new Map<number, number>(); // token_id → last boost timestamp
   const poisonSpikeCacheByHolder = new Map<number, { checkedAt: number; latestPoison: number }>();
   const lastDefendExtraLifeAtByHolder = new Map<number, number>();
   let loggedMissingAddExtraLifeSupport = false;
@@ -882,6 +883,30 @@ async function main() {
         }
 
         if (holderIsProtected) {
+          // Ally boost: give pikasuuu extra lives when holding with power > 350
+          const ALLY_BOOST_ADDRESS = "0x4ebbee02cd68cbdee16b4d60932264cb195341d5adb82870a5d233b980bb622";
+          const ALLY_BOOST_EXTRA_LIVES = 3;
+          const ALLY_BOOST_MIN_POWER = 350;
+          const ALLY_BOOST_INTERVAL_MS = 30_000;
+          const allyTokenIds = protectedTokenIdsByOwner.get(ALLY_BOOST_ADDRESS);
+          const isAllyHolder = allyTokenIds?.has(holderRaw.token_id) ?? false;
+          if (isAllyHolder && snapshot.summitHolder && snapshot.summitHolder.basePower > ALLY_BOOST_MIN_POWER && chain.canAddExtraLife()) {
+            const now = Date.now();
+            const lastBoost = lastAllyExtraLifeAt.get(holderRaw.token_id) ?? 0;
+            if (now - lastBoost >= ALLY_BOOST_INTERVAL_MS) {
+              try {
+                const result = await chain.addExtraLife(holderRaw.token_id, ALLY_BOOST_EXTRA_LIVES);
+                lastAllyExtraLifeAt.set(holderRaw.token_id, now);
+                logger.info(
+                  `[ALLY] Boosted pikasuuu beast ${holderRaw.token_id} with ${ALLY_BOOST_EXTRA_LIVES} extra lives (power=${snapshot.summitHolder.basePower}) tx=${result.txHash}`
+                );
+              } catch (boostErr) {
+                logger.warn(
+                  `[ALLY] Failed to boost pikasuuu beast ${holderRaw.token_id}: ${serializeError(boostErr).substring(0, 220)}`
+                );
+              }
+            }
+          }
           logger.info(`[PROTECT] Skipping protected summit holder token=${holderRaw.token_id}`);
           await sleep(config.api.pollIntervalMs);
           consecutiveErrors = 0;
@@ -1227,6 +1252,7 @@ async function executeAttackWithRetry(
   let validationFailuresByToken = new Map<number, number>();
   let revivalBudgetConflictsByToken = new Map<number, number>();
   let staleDeadReselectCount = 0;
+  let consecutiveL1Failures = 0;
   let focusedRetryTokenId: number | null = null;
   let forceRevivalWhileAlive = false;
   let currentSnapshot = snapshot;
@@ -1487,6 +1513,16 @@ async function executeAttackWithRetry(
     }
     return { allowed: aliveCount === 0, aliveCount };
   };
+
+  // Track consecutive revival fast-excludes within one executeAttack call.
+  // When daily-death resets all beasts at once, discovering them one-by-one
+  // burns 1 failed RPC call per beast. After REVIVAL_FAST_EXCLUDE_BAIL_THRESHOLD
+  // consecutive revival errors, switch ALL remaining batch beasts to revival
+  // mode instead of testing them individually (which wastes 1 RPC per beast).
+  const REVIVAL_FAST_EXCLUDE_BAIL_THRESHOLD = 3;
+  let consecutiveRevivalFastExcludes = 0;
+  let lastBatchBeastIds: number[] = [];
+  const discoveredRevivalNeeds = new Map<number, number>(); // beastId → needed potions
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     let sentAttackPotionsThisAttempt = 0;
@@ -2160,6 +2196,8 @@ async function executeAttackWithRetry(
       });
 
       // SUCCESS!
+      consecutiveL1Failures = 0;
+      consecutiveRevivalFastExcludes = 0;
       logger.info(
         `ATTACK SUCCESS! tx=${result.txHash} captured=${captured ? "yes" : "no"} profile=${profileId ?? "n/a"}`
       );
@@ -2299,7 +2337,20 @@ async function executeAttackWithRetry(
         matchStr.includes("not the summit beast") ||
         matchStr.includes("can only attack beast on summit")
       ) {
-        logger.info(`[L1] Summit holder changed — refreshing snapshot`);
+        consecutiveL1Failures += 1;
+        // On a contested summit, the holder changes every ~0.5-1s. Instant
+        // retries hit the same stale API data and fail again. After the first
+        // failure, add an escalating backoff to let the chain settle and the
+        // API reflect the new holder. Caps at 3s.
+        if (consecutiveL1Failures > 1) {
+          const backoffMs = Math.min(3000, 500 * consecutiveL1Failures);
+          logger.info(
+            `[L1] Summit holder changed (x${consecutiveL1Failures}) — backoff ${backoffMs}ms before refresh`
+          );
+          await sleep(backoffMs);
+        } else {
+          logger.info(`[L1] Summit holder changed — refreshing snapshot`);
+        }
 
         const [newHolder, ownerCache] = await Promise.all([
           chain.getSummitHolderApiShape(),
@@ -2475,16 +2526,104 @@ async function executeAttackWithRetry(
           const aliveAlternativesInSnapshot = getAliveCandidateCount(
             currentSnapshot.ourBeasts.filter((beast) => beast.token_id !== beastId)
           );
-          if (preferApiHealthMode && aliveAlternativesInSnapshot > 0) {
+          if (aliveAlternativesInSnapshot > 0) {
+            // Fast-exclude: when alive beasts exist, don't waste attempts
+            // retrying revival for stale-dead beasts. The focused revival
+            // retry path (forceRevivalWhileAlive) burns 2-3 extra RPC calls
+            // per dead beast before reaching REVIVAL_STUCK_RETRY_LIMIT.
+            // With broad rotation cycling through many beasts, this cascade
+            // compounds: 80 dead beasts × 3 wasted calls = 240 lost attempts.
             excludedTokenIds.add(beastId);
             requiredRevivalPotions.delete(beastId);
             clearFocusedRetryToken(beastId);
             beastCooldownExclusions.set(beastId, Date.now() + 2 * 60 * 60 * 1000);
             lastRevivalSignal = null;
             repeatedRevivalSignals = 0;
+            consecutiveRevivalFastExcludes += 1;
+            discoveredRevivalNeeds.set(beastId, needed);
+            // Track which beasts were in this batch for bail-out
+            if (consecutiveRevivalFastExcludes === 1) {
+              lastBatchBeastIds = freshAction.beasts.map((b) => b.token_id);
+            }
             logger.info(
-              `[L2] Beast ${beastId} requires revival but alive alternatives=${aliveAlternativesInSnapshot} remain — excluding failed beast and continuing alive-first`
+              `[L2] Beast ${beastId} requires revival but alive alternatives=${aliveAlternativesInSnapshot} remain — excluding (streak=${consecutiveRevivalFastExcludes})`
             );
+
+            // Combat-death recovery: after N consecutive "requires revival" errors,
+            // the batch contains beasts killed in previous combats. Dead beasts
+            // take 24h to naturally revive or can be revived instantly with
+            // revival potions. Pre-exclude remaining untested beasts for 2h
+            // (they won't naturally revive anytime soon), then batch-revive
+            // ALL discovered dead beasts using their exact potion needs.
+            // Since we pre-exclude alive/untested beasts, only the known-dead
+            // beasts pass the filter → homogeneous dead batch → contract accepts.
+            if (consecutiveRevivalFastExcludes >= REVIVAL_FAST_EXCLUDE_BAIL_THRESHOLD && revivalEnabledByConfig) {
+              const remainingInBatch = lastBatchBeastIds.filter(
+                (id) => !excludedTokenIds.has(id)
+              );
+              // Pre-exclude remaining untested beasts for 2h. Dead beasts take
+              // 24h to naturally revive, so re-testing them sooner is wasteful.
+              if (remainingInBatch.length > 0) {
+                for (const id of remainingInBatch) {
+                  excludedTokenIds.add(id);
+                  beastCooldownExclusions.set(id, Date.now() + 2 * 60 * 60 * 1000);
+                }
+              }
+              // Un-exclude ALL discovered dead beasts that fit within revival cap.
+              // Set their exact revival needs (from error messages, not estimates).
+              // With focusedRetryTokenId=null, the engine picks them all as a batch.
+              const revivableTargets: { id: number; needed: number }[] = [];
+              for (const [dBeastId, dNeeded] of discoveredRevivalNeeds) {
+                if (dNeeded <= maxRevivalPotionsPerBeast) {
+                  excludedTokenIds.delete(dBeastId);
+                  beastCooldownExclusions.delete(dBeastId);
+                  requiredRevivalPotions.set(dBeastId, dNeeded);
+                  revivableTargets.push({ id: dBeastId, needed: dNeeded });
+                }
+              }
+              if (revivableTargets.length > 0) {
+                // Don't pin to one beast — let the engine batch all of them.
+                focusedRetryTokenId = null;
+                forceRevivalWhileAlive = true;
+              }
+              const savedCalls = remainingInBatch.length;
+              const totalPotions = revivableTargets.reduce((s, t) => s + t.needed, 0);
+              consecutiveRevivalFastExcludes = 0;
+              discoveredRevivalNeeds.clear();
+              logger.warn(
+                `[L2] Combat-death recovery: ${REVIVAL_FAST_EXCLUDE_BAIL_THRESHOLD} consecutive revival failures — ` +
+                `pre-excluded ${savedCalls} beasts (2h cooldown), ` +
+                (revivableTargets.length > 0
+                  ? `batch-reviving ${revivableTargets.length} dead beasts [${revivableTargets.map(t => `${t.id}×${t.needed}`).join(', ')}] (total=${totalPotions} potions)`
+                  : `no revivable beasts found`) +
+                ` (saved ~${savedCalls} failed RPC calls)`
+              );
+              continue;
+            }
+
+            // Bulk pre-exclude: if one beast in the batch is stale-dead,
+            // others likely are too. Probe on-chain to exclude them all at
+            // once instead of discovering them one-by-one (each costs a failed tx).
+            // NOTE: This only catches beasts with health=0 on-chain, NOT daily deaths
+            // (which show health>0). The daily-death recovery above handles those.
+            if (freshAction.beasts.length > 1) {
+              try {
+                const live = await chain.getLiveStats(freshAction.beasts.map((b) => b.token_id));
+                const deadBatch = freshAction.beasts.filter((b) => {
+                  if (b.token_id === beastId) return false; // already excluded above
+                  const stats = live.get(b.token_id);
+                  return resolveEffectiveHealth(stats, b) <= 0;
+                });
+                if (deadBatch.length > 0) {
+                  excludeStaleDeadBeasts(deadBatch, 2 * 60 * 60 * 1000);
+                  logger.info(
+                    `[L2] Bulk pre-excluded ${deadBatch.length} additional stale-dead beasts from batch`
+                  );
+                }
+              } catch {
+                // Best effort: single-beast exclusion above is still applied.
+              }
+            }
             continue;
           }
           if (revivalEnabledByConfig && needed <= maxRevivalPotionsPerBeast) {

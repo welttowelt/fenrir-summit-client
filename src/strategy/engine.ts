@@ -282,7 +282,10 @@ export class StrategyEngine {
         "[STREAK] Hybrid mode active — injecting dead streak beast revival while alive attackers remain"
       );
     } else if (singleBeastRevivalStreakMode) {
-      // Dead streak grinding is most stable when revived/attacked one-by-one.
+      // Revival must use single-beast mode: the contract requires exact revival
+      // potion totals, and our per-beast estimates (revivalCount+1) can drift.
+      // Single-beast errors return "Beast X requires Y potions" (self-correcting),
+      // but batch errors return only "Unused revival potions" (no per-beast detail).
       attackers = pool.slice(0, 1);
       this.logger.info(
         "[STREAK] Revival mode active — reviving dead streak beasts one-by-one"
