@@ -19,6 +19,11 @@ export const ConfigSchema = z.object({
     wsUrl: z.string().default("wss://summit-production-69ed.up.railway.app/ws"),
     pollIntervalMs: z.number().int().positive().default(30_000),
   }),
+  voyager: z.object({
+    apiKey: z.string().default(""),
+    baseUrl: z.string().default("https://api.voyager.online/beta"),
+    enabled: z.boolean().default(false),
+  }).default({}),
   strategy: z.object({
     conservativeMode: z.boolean().default(false),
     experimentMode: z.boolean().default(false),

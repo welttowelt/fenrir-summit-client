@@ -29,6 +29,7 @@ import { enrichBeast } from "./strategy/scoring.js";
 import { Logger } from "./utils/logger.js";
 import { sleep } from "./utils/time.js";
 import type { EnrichedBeast, GameSnapshot } from "./strategy/types.js";
+import { VoyagerClient } from "./api/voyager.js";
 import type { ApiBeast } from "./api/types.js";
 
 type OwnerBeastCacheState = {
@@ -571,6 +572,19 @@ async function main() {
   const chain = new ChainClient(config, logger);
   const engine = new StrategyEngine(config, logger);
 
+  // Voyager API — optional indexed event lookups (poison spikes, battles)
+  const voyager =
+    config.voyager.enabled && config.voyager.apiKey
+      ? new VoyagerClient({
+          apiKey: config.voyager.apiKey,
+          summitContract: config.chain.summitContract,
+          logger,
+        })
+      : null;
+  if (voyager) {
+    logger.info("[VOYAGER] Enabled — using indexed events for poison & battle lookups");
+  }
+
   await chain.init();
   logger.info("Chain client initialized");
 
@@ -996,10 +1010,13 @@ async function main() {
           const poisonCache = poisonSpikeCacheByHolder.get(holderId);
           if (!poisonCache || now - poisonCache.checkedAt >= defendPoisonProbeCacheMs) {
             try {
-              const recentPoisonApplied = await chain.getRecentPoisonAppliedCountForBeast(
-                holderId,
-                defendPoisonLookbackBlocks
-              );
+              // Voyager indexed lookup is faster (single HTTP call vs multi-page RPC scan)
+              const recentPoisonApplied = voyager
+                ? await voyager.getRecentPoisonForBeast(holderId)
+                : await chain.getRecentPoisonAppliedCountForBeast(
+                    holderId,
+                    defendPoisonLookbackBlocks
+                  );
               poisonSpikeCacheByHolder.set(holderId, {
                 checkedAt: now,
                 latestPoison: recentPoisonApplied,

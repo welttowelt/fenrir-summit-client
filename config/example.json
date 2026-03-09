@@ -54,6 +54,11 @@
     "sendAllBeasts": true,
     "maxBeastsPerAttack": 30
   },
+  "voyager": {
+    "apiKey": "",
+    "baseUrl": "https://api.voyager.online/beta",
+    "enabled": false
+  },
   "session": {
     "file": "./data/yourprofile/session.json",
     "dirName": "cartridge-session"

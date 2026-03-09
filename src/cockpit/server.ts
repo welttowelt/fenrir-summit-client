@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { ConfigSchema, type FenrirConfig } from "../config.js";
 import { loadCartridgeSession, isSessionExpired, sessionExpiresIn } from "../chain/controller-signer.js";
+import { VoyagerClient } from "../api/voyager.js";
+import { Logger } from "../utils/logger.js";
 
 type JsonBody = Record<string, unknown>;
 
@@ -793,6 +795,59 @@ const server = createServer(async (req, res) => {
           ...result,
           status,
         });
+        return;
+      }
+    }
+
+    // ── Voyager API proxy endpoints (/api/voyager/...) ──────────────
+    if (parts[0] === "api" && parts[1] === "voyager" && parts.length >= 3) {
+      const action = parts[2];
+      // Load the first profile's config to get the Voyager API key
+      const profiles = await listProfiles();
+      let voyagerConfig: { apiKey: string; baseUrl: string; enabled: boolean } | null = null;
+      let summitContract = "0x01aa95ea66e7e01acf7dc3fda8be0d8661230c4c36b0169e2bab8ab4d6700dfc";
+      for (const pid of profiles) {
+        try {
+          const cfg = await readConfig(pid);
+          if (cfg.voyager?.enabled && cfg.voyager?.apiKey) {
+            voyagerConfig = cfg.voyager;
+            summitContract = cfg.chain.summitContract;
+            break;
+          }
+        } catch { /* skip */ }
+      }
+
+      if (!voyagerConfig) {
+        sendJson(res, 400, { error: "Voyager not configured. Set voyager.apiKey and voyager.enabled in config." });
+        return;
+      }
+
+      const voyagerLogger = new Logger("voyager-cockpit");
+      const voyager = new VoyagerClient({
+        apiKey: voyagerConfig.apiKey,
+        summitContract,
+        logger: voyagerLogger,
+        baseUrl: voyagerConfig.baseUrl,
+      });
+
+      if (action === "battles") {
+        const ps = Number(url.searchParams.get("ps") ?? "25");
+        const battles = await voyager.getRecentBattles(ps);
+        sendJson(res, 200, { battles });
+        return;
+      }
+
+      if (action === "poison") {
+        const ps = Number(url.searchParams.get("ps") ?? "25");
+        const events = await voyager.getRecentPoisonEvents(ps);
+        sendJson(res, 200, { events });
+        return;
+      }
+
+      if (action === "events") {
+        const ps = Number(url.searchParams.get("ps") ?? "25");
+        const events = await voyager.getRecentEvents(ps);
+        sendJson(res, 200, events);
         return;
       }
     }
