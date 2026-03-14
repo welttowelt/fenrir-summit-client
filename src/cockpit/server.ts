@@ -8,6 +8,7 @@ import { build } from "esbuild";
 import { ConfigSchema, type FenrirConfig } from "../config.js";
 import { loadCartridgeSession, isSessionExpired, sessionExpiresIn } from "../chain/controller-signer.js";
 import { VoyagerClient } from "../api/voyager.js";
+import { computeKpis } from "../api/kpi.js";
 import { Logger } from "../utils/logger.js";
 
 type JsonBody = Record<string, unknown>;
@@ -838,6 +839,26 @@ const server = createServer(async (req, res) => {
         });
         return;
       }
+    }
+
+    // ── KPI endpoint (/api/kpi) ───────────────────────────────────────
+    if (parts[0] === "api" && parts[1] === "kpi" && method === "GET") {
+      const topN = Number(url.searchParams.get("top") ?? "25");
+      // Find the summit API base URL from first available profile
+      const profiles = await listProfiles();
+      let summitBaseUrl = "https://summit-production-69ed.up.railway.app";
+      for (const pid of profiles) {
+        try {
+          const cfg = await readConfig(pid);
+          if (cfg.api?.baseUrl) {
+            summitBaseUrl = cfg.api.baseUrl;
+            break;
+          }
+        } catch { /* skip */ }
+      }
+      const snapshot = await computeKpis(summitBaseUrl, topN);
+      sendJson(res, 200, snapshot);
+      return;
     }
 
     // ── Voyager API proxy endpoints (/api/voyager/...) ──────────────
