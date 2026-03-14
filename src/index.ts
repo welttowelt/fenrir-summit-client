@@ -633,6 +633,11 @@ async function main() {
     Math.floor(Number(process.env.FENRIR_QUEST_CLAIM_SCAN_SIZE ?? 120))
   );
   let questClaimCursor = 0;
+  const holderOwnerCache = new Map<number, { owner: string | null; checkedAt: number }>();
+  const HOLDER_OWNER_CACHE_MS = Math.max(
+    30_000,
+    Math.floor(Number(process.env.FENRIR_HOLDER_OWNER_CACHE_MS ?? 180_000))
+  );
   const protectedTokenIdsByOwner = new Map<string, Set<number>>();
   let lastProtectedRefreshAt = 0;
   const lastPoisonAtByHolder = new Map<number, number>();
@@ -766,6 +771,43 @@ async function main() {
     );
 
     return ownerBeastCache;
+  };
+
+  const maybeRunQuestClaimCheck = async (ourBeastsRawWithLive: ApiBeast[]): Promise<void> => {
+    if (Date.now() - lastQuestClaimCheckAt < QUEST_CLAIM_CHECK_MS) {
+      return;
+    }
+    try {
+      const questScanCount = Math.min(
+        ourBeastsRawWithLive.length,
+        QUEST_CLAIM_SCAN_SIZE
+      );
+      const scanStart = questClaimCursor % Math.max(1, ourBeastsRawWithLive.length || 1);
+      const scanEnd = scanStart + questScanCount;
+      const claimSubset =
+        ourBeastsRawWithLive.length === 0
+          ? []
+          : scanEnd <= ourBeastsRawWithLive.length
+            ? ourBeastsRawWithLive.slice(scanStart, scanEnd)
+            : ourBeastsRawWithLive
+                .slice(scanStart)
+                .concat(ourBeastsRawWithLive.slice(0, scanEnd % ourBeastsRawWithLive.length));
+      questClaimCursor =
+        ourBeastsRawWithLive.length === 0
+          ? 0
+          : (scanStart + questScanCount) % ourBeastsRawWithLive.length;
+      const claimResult = await maybeClaimQuestRewards(chain, claimSubset, logger);
+      if (claimResult.attempted > 0) {
+        logger.info(
+          `[QUEST] Claim check complete attempted=${claimResult.attempted} successfulBatchesApprox=${claimResult.claimed} scanSize=${claimSubset.length} totalBeasts=${ourBeastsRawWithLive.length}`
+        );
+      }
+    } catch (claimErr) {
+      const claimMsg = decodeHexFelts(serializeError(claimErr));
+      logger.warn(`[QUEST] Claim check failed: ${claimMsg.substring(0, 300)}`);
+    } finally {
+      lastQuestClaimCheckAt = Date.now();
+    }
   };
 
   const applyLiveStatsToEnrichedBeast = (
@@ -917,11 +959,130 @@ async function main() {
         continue;
       }
 
-      // Build snapshot from API/cache
-      const [holderRaw, ownerCache] = await Promise.all([
-        chain.getSummitHolderApiShape(),
-        getOwnerBeastsCached(false),
-      ]);
+      // Pull holder first so we can short-circuit protected-holder cycles
+      // without refreshing our full beast inventory each poll tick.
+      const holderRaw = await chain.getSummitHolderApiShape();
+
+      if (protectedOwners.length > 0) {
+        const now = Date.now();
+        const refreshInterval = Math.max(15_000, config.strategy.protectedOwnersRefreshMs);
+        if (
+          now - lastProtectedRefreshAt >= refreshInterval ||
+          protectedOwners.some((owner) => !protectedTokenIdsByOwner.has(owner))
+        ) {
+          await refreshProtectedTokenIds(
+            api,
+            protectedOwners,
+            protectedTokenIdsByOwner,
+            logger
+          );
+          lastProtectedRefreshAt = now;
+        }
+      }
+
+      // ── Single protected-owner check (reused for both attack and poison) ──
+      if (holderRaw && protectedOwners.length > 0) {
+        const missingCoverage = protectedOwners.some(
+          (owner) => !protectedTokenIdsByOwner.has(owner)
+        );
+        if (missingCoverage) {
+          logger.warn("[PROTECT] Protected owner token set unavailable — skipping attack cycle");
+          await sleep(config.api.pollIntervalMs);
+          consecutiveErrors = 0;
+          continue;
+        }
+
+        let holderIsProtected = [...protectedTokenIdsByOwner.values()].some((ids) =>
+          ids.has(holderRaw.token_id)
+        );
+
+        // Fallback: if token isn't in the cached set, check owner once and cache.
+        if (!holderIsProtected) {
+          const now = Date.now();
+          const cachedOwner = holderOwnerCache.get(holderRaw.token_id);
+          let holderOwner: string | null = null;
+          if (cachedOwner && now - cachedOwner.checkedAt < HOLDER_OWNER_CACHE_MS) {
+            holderOwner = cachedOwner.owner;
+          } else {
+            try {
+              holderOwner = await chain.getBeastOwner(holderRaw.token_id);
+              holderOwnerCache.set(holderRaw.token_id, {
+                owner: holderOwner,
+                checkedAt: now,
+              });
+            } catch (ownerErr) {
+              // Can't verify — treat as protected to avoid friendly fire.
+              holderIsProtected = true;
+              logger.warn(
+                `[PROTECT] Owner fallback lookup failed for token=${holderRaw.token_id}; treating as protected: ${serializeError(ownerErr).substring(0, 220)}`
+              );
+            }
+          }
+          if (!holderIsProtected && holderOwner && protectedOwners.includes(holderOwner)) {
+            holderIsProtected = true;
+            // Add to owner-token cache for instant future checks.
+            for (const [owner, ids] of protectedTokenIdsByOwner) {
+              if (owner === holderOwner) {
+                ids.add(holderRaw.token_id);
+                break;
+              }
+            }
+          }
+        }
+
+        if (holderIsProtected) {
+          const holderEnriched = enrichBeast(holderRaw);
+          // Ally boost: give pikasuuu extra lives when holding with power > 350
+          const ALLY_BOOST_ADDRESS = "0x4ebbee02cd68cbdee16b4d60932264cb195341d5adb82870a5d233b980bb622";
+          const ALLY_BOOST_EXTRA_LIVES = 1;
+          const ALLY_BOOST_MIN_POWER = 350;
+          const ALLY_BOOST_INTERVAL_MS = 30_000;
+          const allyTokenIds = protectedTokenIdsByOwner.get(ALLY_BOOST_ADDRESS);
+          const isAllyHolder = allyTokenIds?.has(holderRaw.token_id) ?? false;
+          if (
+            isAllyHolder &&
+            holderEnriched.basePower > ALLY_BOOST_MIN_POWER &&
+            chain.canAddExtraLife()
+          ) {
+            const now = Date.now();
+            const lastBoost = lastAllyExtraLifeAt.get(holderRaw.token_id) ?? 0;
+            if (now - lastBoost >= ALLY_BOOST_INTERVAL_MS) {
+              try {
+                const result = await chain.addExtraLife(
+                  holderRaw.token_id,
+                  ALLY_BOOST_EXTRA_LIVES
+                );
+                lastAllyExtraLifeAt.set(holderRaw.token_id, now);
+                logger.info(
+                  `[ALLY] Boosted pikasuuu beast ${holderRaw.token_id} with ${ALLY_BOOST_EXTRA_LIVES} extra lives (power=${holderEnriched.basePower}) tx=${result.txHash}`
+                );
+              } catch (boostErr) {
+                logger.warn(
+                  `[ALLY] Failed to boost pikasuuu beast ${holderRaw.token_id}: ${serializeError(boostErr).substring(0, 220)}`
+                );
+              }
+            }
+          }
+          // Keep quest claims moving on schedule, but avoid full owner refresh on
+          // every protected-holder poll tick.
+          if (Date.now() - lastQuestClaimCheckAt >= QUEST_CLAIM_CHECK_MS) {
+            try {
+              const claimCache = await getOwnerBeastsCached(false);
+              await maybeRunQuestClaimCheck(claimCache.rawWithLive);
+            } catch (claimErr) {
+              logger.warn(
+                `[QUEST] Claim refresh skipped during protected-holder cycle: ${serializeError(claimErr).substring(0, 220)}`
+              );
+            }
+          }
+          logger.info(`[PROTECT] Skipping protected summit holder token=${holderRaw.token_id}`);
+          await sleep(config.api.pollIntervalMs);
+          consecutiveErrors = 0;
+          continue;
+        }
+      }
+
+      const ownerCache = await getOwnerBeastsCached(false);
       const nowMs = Date.now();
       for (const [tokenId, expiry] of beastCooldownExclusions) {
         if (expiry <= nowMs) beastCooldownExclusions.delete(tokenId);
@@ -960,130 +1121,7 @@ async function main() {
         timestamp: Date.now(),
       };
 
-      if (protectedOwners.length > 0) {
-        const now = Date.now();
-        const refreshInterval = Math.max(15_000, config.strategy.protectedOwnersRefreshMs);
-        if (
-          now - lastProtectedRefreshAt >= refreshInterval ||
-          protectedOwners.some((owner) => !protectedTokenIdsByOwner.has(owner))
-        ) {
-          await refreshProtectedTokenIds(
-            api,
-            protectedOwners,
-            protectedTokenIdsByOwner,
-            logger
-          );
-          lastProtectedRefreshAt = now;
-        }
-      }
-
-      if (Date.now() - lastQuestClaimCheckAt >= QUEST_CLAIM_CHECK_MS) {
-        try {
-          const questScanCount = Math.min(
-            ourBeastsRawWithLive.length,
-            QUEST_CLAIM_SCAN_SIZE
-          );
-          const scanStart = questClaimCursor % Math.max(1, ourBeastsRawWithLive.length || 1);
-          const scanEnd = scanStart + questScanCount;
-          const claimSubset =
-            ourBeastsRawWithLive.length === 0
-              ? []
-              : scanEnd <= ourBeastsRawWithLive.length
-                ? ourBeastsRawWithLive.slice(scanStart, scanEnd)
-                : ourBeastsRawWithLive
-                    .slice(scanStart)
-                    .concat(ourBeastsRawWithLive.slice(0, scanEnd % ourBeastsRawWithLive.length));
-          questClaimCursor =
-            ourBeastsRawWithLive.length === 0
-              ? 0
-              : (scanStart + questScanCount) % ourBeastsRawWithLive.length;
-          const claimResult = await maybeClaimQuestRewards(chain, claimSubset, logger);
-          if (claimResult.attempted > 0) {
-            logger.info(
-              `[QUEST] Claim check complete attempted=${claimResult.attempted} successfulBatchesApprox=${claimResult.claimed} scanSize=${claimSubset.length} totalBeasts=${ourBeastsRawWithLive.length}`
-            );
-          }
-        } catch (claimErr) {
-          const claimMsg = decodeHexFelts(serializeError(claimErr));
-          logger.warn(`[QUEST] Claim check failed: ${claimMsg.substring(0, 300)}`);
-        } finally {
-          lastQuestClaimCheckAt = Date.now();
-        }
-      }
-
-      // ── Single protected-owner check (reused for both attack and poison) ──
-      let holderIsProtected = false;
-      if (holderRaw && protectedOwners.length > 0) {
-        const missingCoverage = protectedOwners.some(
-          (owner) => !protectedTokenIdsByOwner.has(owner)
-        );
-        if (missingCoverage) {
-          logger.warn("[PROTECT] Protected owner token set unavailable — skipping attack cycle");
-          await sleep(config.api.pollIntervalMs);
-          consecutiveErrors = 0;
-          continue;
-        }
-
-        holderIsProtected = [...protectedTokenIdsByOwner.values()].some((ids) =>
-          ids.has(holderRaw.token_id)
-        );
-
-        // Fallback: if token isn't in the cached set, check the on-chain owner
-        // directly. This catches beasts missed by pagination or acquired after
-        // the last protected-owner refresh.
-        if (!holderIsProtected) {
-          try {
-            const holderOwner = await chain.getBeastOwner(holderRaw.token_id);
-            if (holderOwner && protectedOwners.includes(holderOwner)) {
-              holderIsProtected = true;
-              // Add to cache so future checks are instant
-              for (const [owner, ids] of protectedTokenIdsByOwner) {
-                if (owner === holderOwner) {
-                  ids.add(holderRaw.token_id);
-                  break;
-                }
-              }
-            }
-          } catch (ownerErr) {
-            // Can't verify — treat as protected to avoid friendly fire
-            holderIsProtected = true;
-            logger.warn(
-              `[PROTECT] Owner fallback lookup failed for token=${holderRaw.token_id}; treating as protected: ${serializeError(ownerErr).substring(0, 220)}`
-            );
-          }
-        }
-
-        if (holderIsProtected) {
-          // Ally boost: give pikasuuu extra lives when holding with power > 350
-          const ALLY_BOOST_ADDRESS = "0x4ebbee02cd68cbdee16b4d60932264cb195341d5adb82870a5d233b980bb622";
-          const ALLY_BOOST_EXTRA_LIVES = 1;
-          const ALLY_BOOST_MIN_POWER = 350;
-          const ALLY_BOOST_INTERVAL_MS = 30_000;
-          const allyTokenIds = protectedTokenIdsByOwner.get(ALLY_BOOST_ADDRESS);
-          const isAllyHolder = allyTokenIds?.has(holderRaw.token_id) ?? false;
-          if (isAllyHolder && snapshot.summitHolder && snapshot.summitHolder.basePower > ALLY_BOOST_MIN_POWER && chain.canAddExtraLife()) {
-            const now = Date.now();
-            const lastBoost = lastAllyExtraLifeAt.get(holderRaw.token_id) ?? 0;
-            if (now - lastBoost >= ALLY_BOOST_INTERVAL_MS) {
-              try {
-                const result = await chain.addExtraLife(holderRaw.token_id, ALLY_BOOST_EXTRA_LIVES);
-                lastAllyExtraLifeAt.set(holderRaw.token_id, now);
-                logger.info(
-                  `[ALLY] Boosted pikasuuu beast ${holderRaw.token_id} with ${ALLY_BOOST_EXTRA_LIVES} extra lives (power=${snapshot.summitHolder.basePower}) tx=${result.txHash}`
-                );
-              } catch (boostErr) {
-                logger.warn(
-                  `[ALLY] Failed to boost pikasuuu beast ${holderRaw.token_id}: ${serializeError(boostErr).substring(0, 220)}`
-                );
-              }
-            }
-          }
-          logger.info(`[PROTECT] Skipping protected summit holder token=${holderRaw.token_id}`);
-          await sleep(config.api.pollIntervalMs);
-          consecutiveErrors = 0;
-          continue;
-        }
-      }
+      await maybeRunQuestClaimCheck(ourBeastsRawWithLive);
 
       const poisonMinHolderPower = Math.max(
         0,
@@ -1095,14 +1133,9 @@ async function main() {
         const holderIsOurs = ourBeastsRawWithLive.some(
           (beast) => beast.token_id === holderRaw.token_id
         );
-        // holderIsProtected already checked above — no need for second RPC call
         if (holderIsOurs) {
           logger.debug(
             `[POISON] Skip: holder token=${holderRaw.token_id} belongs to our account`
-          );
-        } else if (holderIsProtected) {
-          logger.info(
-            `[PROTECT] Skipping poison for protected holder token=${holderRaw.token_id}`
           );
         } else {
           const extraLives = Number(holderRaw.extra_lives ?? 0);
