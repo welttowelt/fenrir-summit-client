@@ -1520,8 +1520,13 @@ async function executeAttackWithRetry(
     Date.now() < revivalAllowanceFallbackUntil;
   const VRF_SEED_REQUEST_MIN_INTERVAL_MS = 1_000;
   const VRF_SEED_WAIT_MS = 1_500;
+  const VRF_MISSING_SEED_FAILFAST_ATTEMPTS = Math.max(
+    3,
+    Math.floor(Number(process.env.FENRIR_VRF_MISSING_SEED_FAILFAST_ATTEMPTS ?? 8))
+  );
   let lastVrfSeedRequestAt = 0;
   let consecutiveVrfSeedPreparationFailures = 0;
+  let consecutiveMissingVrfSeedNonVrfErrors = 0;
   let excludedTokenIds = new Set<number>();
   let requiredRevivalPotions = new Map<number, number>();
   let forcedRevivalFloor = 0;
@@ -2055,6 +2060,7 @@ async function executeAttackWithRetry(
     let sentAttackPotionsThisAttempt = 0;
     let sentExtraLifePotionsThisAttempt = 0;
     let sentRevivalPotionsThisAttempt = 0;
+    let attemptUsedVrf = false;
     const attemptPriorityTokenIds =
       attempt === 1
         ? (action.beasts ?? []).map((beast) => beast.token_id)
@@ -2835,6 +2841,7 @@ async function executeAttackWithRetry(
         }
       }
 
+      attemptUsedVrf = payloadForAttempt.useVrf === true;
       const result = await chain.attack(payloadForAttempt);
       const profileId =
         typeof (payloadForAttempt as { profileId?: unknown }).profileId === "string"
@@ -2859,6 +2866,7 @@ async function executeAttackWithRetry(
       // SUCCESS!
       consecutiveL1Failures = 0;
       consecutiveVrfSeedPreparationFailures = 0;
+      consecutiveMissingVrfSeedNonVrfErrors = 0;
       logger.info(
         `ATTACK SUCCESS! tx=${result.txHash} captured=${captured ? "yes" : "no"} profile=${profileId ?? "n/a"}`
       );
@@ -2913,6 +2921,21 @@ async function executeAttackWithRetry(
         matchStrLower.includes("vrfprovider") && matchStrLower.includes("not fulfilled");
       const missingVrfSeed = matchStrLower.includes("missing vrf seed");
       if (vrfNotFulfilled || missingVrfSeed) {
+        if (missingVrfSeed && !attemptUsedVrf) {
+          consecutiveMissingVrfSeedNonVrfErrors += 1;
+          if (
+            consecutiveMissingVrfSeedNonVrfErrors >=
+            VRF_MISSING_SEED_FAILFAST_ATTEMPTS
+          ) {
+            logger.warn(
+              `[L2V] Missing VRF seed persisted ${consecutiveMissingVrfSeedNonVrfErrors} times in non-VRF mode — yielding to next poll cycle`
+            );
+            return;
+          }
+        } else {
+          consecutiveMissingVrfSeedNonVrfErrors = 0;
+        }
+
         let vrfRecoveryWaitMs = VRF_SEED_WAIT_MS;
         const now = Date.now();
         if (now - lastVrfSeedRequestAt >= VRF_SEED_REQUEST_MIN_INTERVAL_MS) {
@@ -2957,6 +2980,7 @@ async function executeAttackWithRetry(
         await sleep(vrfRecoveryWaitMs);
         continue;
       }
+      consecutiveMissingVrfSeedNonVrfErrors = 0;
 
       if (
         matchStr.includes("ERC20: insufficient allowance") ||
