@@ -2590,8 +2590,10 @@ async function executeAttackWithRetry(
           1,
           Math.floor(config.strategy.attackPotionsPerBeast)
         );
+        // Keep engine-selected potion amounts (dynamic tuning), while ensuring
+        // non-zero spend when strict "attack potion required" mode is active.
         const scoredAttackPotions = requireAttackPotions
-          ? configuredAttackPotions
+          ? Math.max(1, tupleAttackPotions || configuredAttackPotions)
           : tupleAttackPotions;
         const effectiveAttackPotions = disableAttackPotionSpendForAttempt
           ? 0
